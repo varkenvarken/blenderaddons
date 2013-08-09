@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Board Generator",
     "author": "michel anders (varkenvarken)",
-    "version": (0, 0, 1),
+    "version": (0, 0, 2),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -192,6 +192,10 @@ class FloorBoards(bpy.types.Operator):
                     default=0,
                     min=0)
 
+    randomuv = BoolProperty(name="Randomize UVs",
+                    description="Randomize the uv-offset of individual planks",
+                    default=True)
+					
     @classmethod
     def poll(self, context):
         # Check if we are in object mode
@@ -210,6 +214,16 @@ class FloorBoards(bpy.types.Operator):
         mesh = bpy.data.meshes.new('Planks')
         mesh.from_pydata(verts, [], faces)
         mesh.update(calc_edges=True)
+
+        # add uv-coords        
+        mesh.uv_textures.new()
+        uv_layer = mesh.uv_layers.active.data
+        for poly in mesh.polygons:
+            offset = Vector((rand(),rand(),0)) if self.randomuv else Vector((0,0,0)) 
+            for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+                coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+                uv_layer[loop_index].uv = (coords + offset).xy
+
         obj_new = bpy.data.objects.new(mesh.name, mesh)
         base = bpy.context.scene.objects.link(obj_new)
         for ob in bpy.context.scene.objects:
