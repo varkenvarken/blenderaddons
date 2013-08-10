@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Board Generator",
     "author": "michel anders (varkenvarken)",
-    "version": (0, 0, 2),
+    "version": (0, 0, 3),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -98,7 +98,7 @@ class FloorBoards(bpy.types.Operator):
     length = FloatProperty(name="Floor Length",
                     description="Length of the floor in Blender units",
                     default=4,
-                    min=0.5,
+                    soft_min=0.5,
                     soft_max=40.0,
                     subtype='DISTANCE',
                     unit='LENGTH')
@@ -106,12 +106,12 @@ class FloorBoards(bpy.types.Operator):
     nplanks = IntProperty(name="Number of planks",
                     description="Number of planks (the width)",
                     default=5,
-                    min=0)
+                    soft_min=1)
 
     planklength = FloatProperty(name="Plank Length",
                     description="Length of a single plank",
                     default=2,
-                    min=0.5,
+                    soft_min=0.5,
                     soft_max=40.0,
                     subtype='DISTANCE',
                     unit='LENGTH')
@@ -127,7 +127,7 @@ class FloorBoards(bpy.types.Operator):
     plankwidth = FloatProperty(name="Plank Width",
                     description="Width of a single plank",
                     default=0.18,
-                    min=0.05,
+                    soft_min=0.05,
                     soft_max=40.0,
                     subtype='DISTANCE',
                     unit='LENGTH')
