@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Board Generator",
     "author": "michel anders (varkenvarken)",
-    "version": (0, 0, 3),
+    "version": (0, 0, 4),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -218,11 +218,14 @@ class FloorBoards(bpy.types.Operator):
         # add uv-coords        
         mesh.uv_textures.new()
         uv_layer = mesh.uv_layers.active.data
+        vertex_colors = mesh.vertex_colors.new().data
         for poly in mesh.polygons:
             offset = Vector((rand(),rand(),0)) if self.randomuv else Vector((0,0,0)) 
+            color = [rand(), rand(), rand()]
             for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
                 coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
                 uv_layer[loop_index].uv = (coords + offset).xy
+                vertex_colors[loop_index].color = color
 
         obj_new = bpy.data.objects.new(mesh.name, mesh)
         base = bpy.context.scene.objects.link(obj_new)
