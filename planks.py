@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  SCA Tree Generator, a Blender addon
+#  Floor Generator, a Blender addon
 #  (c) 2013 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
@@ -22,9 +22,9 @@
 # <pep8 compliant>
 
 bl_info = {
-    "name": "Floor Board Generator",
-    "author": "michel anders (varkenvarken)",
-    "version": (0, 0, 4),
+    "name": "Floor Generator",
+    "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain)",
+    "version": (0, 0, 6),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -33,7 +33,7 @@ bl_info = {
     "tracker_url": "",
     "category": "Add Mesh"}
 
-from random import random as rand, seed
+from random import random as rand, seed, uniform as randuni
 import bpy, bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty
 from mathutils import Vector
@@ -51,9 +51,11 @@ def planks(n, m,
     length, lengthvar,
     width, widthvar,
     longgap, shortgap,
-    offset,
+    offset, randomoffset,
     nseed):
-
+    
+    #n=Number of planks, m=Floor Length, length = Planklength
+    
     verts = []
     faces = []
     shortedges = []
@@ -63,12 +65,17 @@ def planks(n, m,
     widthoffset = 0
     s = 0
     e = offset
+    c = offset #Offset per row
     ws = 0
     p = 0
+
     while p < n:
         p += 1
-        w = width + widthvar * rand()
+        w = width + randuni (0,widthvar)
         we = ws + w
+        if randomoffset:
+            e = randuni(0,length)
+        #print ("Offset:",e)
         #print("row",p)
         while e < m:
             #print("plank",s,e)
@@ -78,7 +85,7 @@ def planks(n, m,
             shortedges.extend([(ll, ll + 1), (ll + 2, ll + 3)])
             longedges.extend([(ll + 1, ll + 2 ), (ll + 3, ll)])
             s = e
-            e += length + lengthvar * rand()
+            e += length + randuni(0,lengthvar)
         #print("end plank",s,e)
         ll = len(verts)
         verts.extend(plank(s, m, ws, we, longgap, shortgap))
@@ -86,7 +93,13 @@ def planks(n, m,
         shortedges.extend([(ll, ll + 1), (ll + 2, ll + 3)])
         longedges.extend([(ll + 1, ll + 2 ), (ll + 3, ll)])
         s = 0
-        e = e - m
+        #e = e - m
+        if c <= (length):
+            c = c + offset
+        if c > (length):
+            c = c - length
+        e = c
+        print ("e, c: ", e, c)
         ws = we
     return verts, faces, shortedges, longedges
 
@@ -95,7 +108,7 @@ class FloorBoards(bpy.types.Operator):
     bl_label = "FloorBoards"
     bl_options = {'REGISTER', 'UNDO', 'PRESET'}
 
-    length = FloatProperty(name="Floor Length",
+    length = FloatProperty(name="Floor Area Length",
                     description="Length of the floor in Blender units",
                     default=4,
                     soft_min=0.5,
@@ -116,8 +129,8 @@ class FloorBoards(bpy.types.Operator):
                     subtype='DISTANCE',
                     unit='LENGTH')
 
-    planklengthvar = FloatProperty(name="Length Var",
-                    description="Length variation of single planks",
+    planklengthvar = FloatProperty(name="Max Length Var",
+                    description="Max Length variation of single planks",
                     default=0.2,
                     min=0,
                     soft_max=40.0,
@@ -132,8 +145,8 @@ class FloorBoards(bpy.types.Operator):
                     subtype='DISTANCE',
                     unit='LENGTH')
 
-    plankwidthvar = FloatProperty(name="Width Var",
-                    description="Width variation of single planks",
+    plankwidthvar = FloatProperty(name="Max Width Var",
+                    description="Max Width variation of single planks",
                     default=0,
                     min=0,
                     soft_max=4.0,
@@ -180,12 +193,16 @@ class FloorBoards(bpy.types.Operator):
                     unit='LENGTH')
 
     offset = FloatProperty(name="Offset",
-                    description="Offset of the first plank",
+                    description="Offset per row in Blender Units",
                     default=0.4,
                     min=0,
                     soft_max=2,
                     subtype='DISTANCE',
                     unit='LENGTH')
+                 
+    randomoffset = BoolProperty(name="Offset random",
+                    description="Uses random values for offset",
+                    default=False)           
 
     randomseed = IntProperty(name="Random Seed",
                     description="The seed governing random generation",
@@ -195,7 +212,11 @@ class FloorBoards(bpy.types.Operator):
     randomuv = BoolProperty(name="Randomize UVs",
                     description="Randomize the uv-offset of individual planks",
                     default=True)
-					
+
+    modifiers = BoolProperty(name="Add modifiers",
+                    description="Add bevel and solidify modifiers to the planks",
+                    default=True)
+
     @classmethod
     def poll(self, context):
         # Check if we are in object mode
@@ -207,7 +228,7 @@ class FloorBoards(bpy.types.Operator):
             self.planklength, self.planklengthvar,
             self.plankwidth, self.plankwidthvar,
             self.longgap, self.shortgap,
-            self.offset,
+            self.offset, self.randomoffset,
             self.randomseed)
 
         # create mesh &link object to scene
@@ -215,7 +236,7 @@ class FloorBoards(bpy.types.Operator):
         mesh.from_pydata(verts, [], faces)
         mesh.update(calc_edges=True)
 
-        # add uv-coords        
+        # add uv-coords and per face random vertex colors
         mesh.uv_textures.new()
         uv_layer = mesh.uv_layers.active.data
         vertex_colors = mesh.vertex_colors.new().data
@@ -234,13 +255,15 @@ class FloorBoards(bpy.types.Operator):
         base.select = True
         bpy.context.scene.objects.active = obj_new
         
-        # add solidify modifier to give planks thickness
-        bpy.ops.object.modifier_add(type='SOLIDIFY')
-        bpy.context.active_object.modifiers[0].thickness = self.thickness
+        if self.modifiers:
+            # add solidify modifier to give planks thickness
+            bpy.ops.object.modifier_add(type='SOLIDIFY')
+            bpy.context.active_object.modifiers[0].thickness = self.thickness
 
-        # add bevel modifier
-        bpy.ops.object.modifier_add(type='BEVEL')
-        bpy.context.active_object.modifiers[1].width = self.bevel
+            # add bevel modifier
+            bpy.ops.object.modifier_add(type='BEVEL')
+            bpy.context.active_object.modifiers[1].width = self.bevel
+        
         return {'FINISHED'}
 
     def draw(self, context):
@@ -254,9 +277,12 @@ class FloorBoards(bpy.types.Operator):
         layout.prop(self, 'plankwidthvar')
         layout.prop(self, 'thickness')
         layout.prop(self, 'offset')
+        layout.prop(self, 'randomoffset')
         layout.prop(self, 'longgap')
         layout.prop(self, 'shortgap')
         layout.prop(self, 'bevel')
+        layout.prop(self, 'randomuv')
+        layout.prop(self, 'modifiers')
         layout.prop(self, 'randomseed')
 
 def menu_func(self, context):
