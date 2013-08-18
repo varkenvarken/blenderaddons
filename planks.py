@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Generator",
     "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain)",
-    "version": (0, 0, 6),
+    "version": (0, 0, 7),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -34,17 +34,29 @@ bl_info = {
     "category": "Add Mesh"}
 
 from random import random as rand, seed, uniform as randuni
+from math import pi as PI
 import bpy, bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty
-from mathutils import Vector
+from mathutils import Vector, Euler
 
-def plank(start, end, left, right, longgap, shortgap):
-    verts = (
-        Vector((start, left, 0)),
-        Vector((start, right - longgap, 0)),
-        Vector((end - shortgap, right - longgap, 0)),
-        Vector((end - shortgap, left, 0))
-    )
+# Vector.rotate() does NOT return anything, contrary to what the docs say
+def rotate(v, r):
+    v2 = v.copy()
+    v2.rotate(r)
+    return v2
+    
+def plank(start, end, left, right, longgap, shortgap, rot=None):
+    ll = Vector((start, left, 0))
+    lr = Vector((start, right - longgap, 0))
+    ul = Vector((end - shortgap, right - longgap, 0))
+    ur = Vector((end - shortgap, left, 0))
+    if rot :
+        midpoint = Vector((start + end / 2, left + right / 2, 0))
+        ll = rotate((ll - midpoint), rot) + midpoint
+        lr = rotate((lr - midpoint), rot) + midpoint
+        ul = rotate((ul - midpoint), rot) + midpoint
+        ur = rotate((ur - midpoint), rot) + midpoint
+    verts = (ll, lr, ul, ur)
     return verts
 
 def planks(n, m,
@@ -52,7 +64,8 @@ def planks(n, m,
     width, widthvar,
     longgap, shortgap,
     offset, randomoffset,
-    nseed):
+    nseed,
+    randrotx, randroty, randrotz):
     
     #n=Number of planks, m=Floor Length, length = Planklength
     
@@ -71,16 +84,17 @@ def planks(n, m,
 
     while p < n:
         p += 1
-        w = width + randuni (0,widthvar)
+        w = width + randuni(0, widthvar)
         we = ws + w
         if randomoffset:
-            e = randuni(0,length)
+            e = randuni(0,length) # I think we should change length into offset. That way we have indepent control of of the offset variation
         #print ("Offset:",e)
         #print("row",p)
         while e < m:
             #print("plank",s,e)
             ll = len(verts)
-            verts.extend(plank(s, e, ws, we, longgap, shortgap))
+            rot = Euler((randrotx * randuni(-1,1),randroty * randuni(-1,1), randrotz * randuni(-1,1)), 'XYZ')
+            verts.extend(plank(s, e, ws, we, longgap, shortgap, rot))
             faces.append((ll, ll + 1, ll + 2, ll + 3))
             shortedges.extend([(ll, ll + 1), (ll + 2, ll + 3)])
             longedges.extend([(ll + 1, ll + 2 ), (ll + 3, ll)])
@@ -88,7 +102,8 @@ def planks(n, m,
             e += length + randuni(0,lengthvar)
         #print("end plank",s,e)
         ll = len(verts)
-        verts.extend(plank(s, m, ws, we, longgap, shortgap))
+        rot = Euler((randrotx * randuni(-1,1), randroty * randuni(-1,1), randrotz * randuni(-1,1)), 'XYZ')
+        verts.extend(plank(s, m, ws, we, longgap, shortgap, rot))
         faces.append((ll, ll + 1, ll + 2, ll + 3))
         shortedges.extend([(ll, ll + 1), (ll + 2, ll + 3)])
         longedges.extend([(ll + 1, ll + 2 ), (ll + 3, ll)])
@@ -99,7 +114,7 @@ def planks(n, m,
         if c > (length):
             c = c - length
         e = c
-        print ("e, c: ", e, c)
+        #print ("e, c: ", e, c)
         ws = we
     return verts, faces, shortedges, longedges
 
@@ -217,6 +232,36 @@ class FloorBoards(bpy.types.Operator):
                     description="Add bevel and solidify modifiers to the planks",
                     default=True)
 
+    randrotx = FloatProperty(name="X Rotataion",
+                    description="Randam rotation of individual planks around x-axis",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=(0.02/180)*PI,
+                    precision=4,
+                    subtype='ANGLE',
+                    unit='ROTATION')
+
+    randroty = FloatProperty(name="Y Rotataion",
+                    description="Randam rotation of individual planks around y-axis",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=(0.02/180)*PI,
+                    precision=4,
+                    subtype='ANGLE',
+                    unit='ROTATION')
+
+    randrotz = FloatProperty(name="Z Rotataion",
+                    description="Randam rotation of individual planks around z-axis",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=(0.02/180)*PI,
+                    precision=4,
+                    subtype='ANGLE',
+                    unit='ROTATION')
+
     @classmethod
     def poll(self, context):
         # Check if we are in object mode
@@ -229,7 +274,8 @@ class FloorBoards(bpy.types.Operator):
             self.plankwidth, self.plankwidthvar,
             self.longgap, self.shortgap,
             self.offset, self.randomoffset,
-            self.randomseed)
+            self.randomseed,
+            self.randrotx, self.randroty, self.randrotz)
 
         # create mesh &link object to scene
         mesh = bpy.data.meshes.new('Planks')
@@ -269,20 +315,30 @@ class FloorBoards(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
 
-        layout.prop(self, 'length')
-        layout.prop(self, 'nplanks')
-        layout.prop(self, 'planklength')
-        layout.prop(self, 'planklengthvar')
-        layout.prop(self, 'plankwidth')
-        layout.prop(self, 'plankwidthvar')
-        layout.prop(self, 'thickness')
-        layout.prop(self, 'offset')
-        layout.prop(self, 'randomoffset')
-        layout.prop(self, 'longgap')
-        layout.prop(self, 'shortgap')
-        layout.prop(self, 'bevel')
-        layout.prop(self, 'randomuv')
-        layout.prop(self, 'modifiers')
+        box = layout.box()
+        box.prop(self, 'length')
+        box.prop(self, 'nplanks')
+        
+        box = layout.box()
+        box.prop(self, 'planklength')
+        box.prop(self, 'planklengthvar')
+        box.prop(self, 'plankwidth')
+        box.prop(self, 'plankwidthvar')
+        box.prop(self, 'thickness')
+        box.prop(self, 'offset')
+        box.prop(self, 'randomoffset')
+        box.prop(self, 'longgap')
+        box.prop(self, 'shortgap')
+        box.prop(self, 'bevel')
+        
+        box = layout.box()
+        box.prop(self, 'randrotx')
+        box.prop(self, 'randroty')
+        box.prop(self, 'randrotz')
+        
+        box = layout.box()
+        box.prop(self, 'randomuv')
+        box.prop(self, 'modifiers')
         layout.prop(self, 'randomseed')
 
 def menu_func(self, context):
