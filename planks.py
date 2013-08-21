@@ -23,8 +23,8 @@
 
 bl_info = {
     "name": "Floor Generator",
-    "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain)",
-    "version": (0, 0, 7),
+    "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
+    "version": (0, 0, 8),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -36,7 +36,7 @@ bl_info = {
 from random import random as rand, seed, uniform as randuni
 from math import pi as PI
 import bpy, bmesh
-from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty
+from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty, StringProperty
 from mathutils import Vector, Euler
 
 # Vector.rotate() does NOT return anything, contrary to what the docs say
@@ -118,57 +118,197 @@ def planks(n, m,
         ws = we
     return verts, faces, shortedges, longedges
 
-class FloorBoards(bpy.types.Operator):
-    bl_idname = "mesh.floor_boards"
-    bl_label = "FloorBoards"
-    bl_options = {'REGISTER', 'UNDO', 'PRESET'}
+def shortside(vert):
+    """return true if 2 out of 3 connected vertices are x aligned"""
+    x = vert.co.x
+    n = 0
+    for e in vert.link_edges:
+        xo = e.other_vert(vert).co.x
+        if abs(xo - x) < 1e-4:
+            n+=1
+    return n == 2
 
-    length = FloatProperty(name="Floor Area Length",
+def updateMesh(self, context):
+    o = context.object
+
+    verts, faces, shortedges, longedges = planks(o.nplanks, o.length,
+        o.planklength, o.planklengthvar,
+        o.plankwidth, o.plankwidthvar,
+        o.longgap, o.shortgap,
+        o.offset, o.randomoffset,
+        o.randomseed,
+        o.randrotx, o.randroty, o.randrotz)
+
+    # create mesh &link object to scene
+    emesh=o.data
+ 
+    mesh = bpy.data.meshes.new(name='Planks')
+    mesh.from_pydata(verts,[],faces)
+ 
+    mesh.update(calc_edges=True)
+ 
+    for i in bpy.data.objects:
+        if  i.data==emesh:i.data=mesh
+ 
+    name = emesh.name
+    emesh.user_clear()
+    bpy.data.meshes.remove(emesh)
+    mesh.name=name
+    if  bpy.context.mode!='EDIT_MESH':
+        bpy.ops.object.editmode_toggle()
+        bpy.ops.object.editmode_toggle()
+
+    bpy.ops.object.shade_smooth()
+    
+    # add uv-coords and per face random vertex colors
+    mesh.uv_textures.new()
+    uv_layer = mesh.uv_layers.active.data
+    vertex_colors = mesh.vertex_colors.new().data
+    for poly in mesh.polygons:
+        offset = Vector((rand(),rand(),0)) if o.randomuv else Vector((0,0,0)) 
+        color = [rand(), rand(), rand()]
+        for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+            coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+            uv_layer[loop_index].uv = (coords + offset).xy
+            vertex_colors[loop_index].color = color
+    
+    # subdivide mesh and warp it
+    warped = o.hollowlong > 0 or o.hollowshort > 0 or o.twist > 0
+    if warped:
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        
+        # calculate hollowness for each face
+        dshortmap={}
+        dlongmap={}
+        for face in bm.faces:
+            dshort = o.hollowshort * rand()
+            dlong = o.hollowlong * rand()
+            for v in face.verts:
+                dshortmap[v.index] = dshort
+                dlongmap[v.index] = dlong
+                print(v.index)
+        
+        bm.to_mesh(mesh)
+        bm.free()
+        
+        # at this point all new geometry is selected and subdivide works in all selection modes
+        bpy.ops.object.editmode_toggle()
+        bpy.ops.mesh.subdivide() # bmesh subdivide doesn't work for me ...
+        bpy.ops.object.editmode_toggle()
+        
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        
+        for v in bm.verts:
+            if o.twist and len(v.link_edges) == 4: # vertex in the middle of the plank
+                dtwist = o.twist * randuni(-1,1)
+                for e in v.link_edges:
+                    v2 = e.other_vert(v) # the vertices on the side of the plank
+                    if shortside(v2):
+                        for e2 in v2.link_edges:
+                            v3 = e2.other_vert(v2)
+                            if len(v3.link_edges) == 2:
+                                v3.co.z += dtwist
+                                dtwist = -dtwist # one corner up, the other corner down
+            elif len(v.link_edges) == 3: # vertex in the middle of a side of the plank
+                for e in v.link_edges:
+                    v2 = e.other_vert(v)
+                    if len(v2.link_edges) == 2: # hollowness values are stored with the all original corner vertices
+                        dshort = dshortmap[v2.index]
+                        dlong = dlongmap[v2.index]
+                        break
+                if shortside(v):
+                    v.co.z -= dlong
+                else:
+                    v.co.z -= dshort
+                        
+        creases = bm.edges.layers.crease.new()
+        for edge in bm.edges:
+            edge[creases] = 1
+            for vert in edge.verts:
+                if len(vert.link_edges) == 4:
+                    edge[creases] = 0
+                    break
+            
+        bm.to_mesh(mesh)
+        bm.free()
+        
+    if self.modify:
+        mods = o.modifiers
+        if len(mods) == 0:
+            bpy.ops.object.modifier_add(type='SOLIDIFY')
+            bpy.ops.object.modifier_add(type='BEVEL')
+            bpy.ops.object.modifier_add(type='EDGE_SPLIT')
+            if warped:
+                bpy.ops.object.modifier_add(type='SUBSURF')
+            mods = o.modifiers
+            mods[0].show_expanded = False;
+            mods[1].show_expanded = False;
+            mods[2].show_expanded = False;
+            mods[0].thickness = self.thickness
+            mods[1].width = self.bevel
+    else: #maybe change this to walk the modifier stack and remove all
+        if warped:
+            bpy.ops.object.modifier_remove(modifier='Subsurf')
+        bpy.ops.object.modifier_remove(modifier='EdgeSplit')
+        bpy.ops.object.modifier_remove(modifier='Bevel')
+        bpy.ops.object.modifier_remove(modifier='Solidify')            
+
+bpy.types.Object.reg = StringProperty(default='FloorBoards')
+
+bpy.types.Object.length = FloatProperty(name="Floor Area Length",
                     description="Length of the floor in Blender units",
                     default=4,
                     soft_min=0.5,
                     soft_max=40.0,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    nplanks = IntProperty(name="Number of planks",
-                    description="Number of planks (the width)",
+bpy.types.Object.nplanks = IntProperty(name="Number of rows",
+                    description="Number of rows (the width)",
                     default=5,
-                    soft_min=1)
+                    soft_min=1,
+                    update=updateMesh)
 
-    planklength = FloatProperty(name="Plank Length",
+bpy.types.Object.planklength = FloatProperty(name="Plank Length",
                     description="Length of a single plank",
                     default=2,
                     soft_min=0.5,
                     soft_max=40.0,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    planklengthvar = FloatProperty(name="Max Length Var",
+bpy.types.Object.planklengthvar = FloatProperty(name="Max Length Var",
                     description="Max Length variation of single planks",
                     default=0.2,
                     min=0,
                     soft_max=40.0,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    plankwidth = FloatProperty(name="Plank Width",
+bpy.types.Object.plankwidth = FloatProperty(name="Plank Width",
                     description="Width of a single plank",
                     default=0.18,
                     soft_min=0.05,
                     soft_max=40.0,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    plankwidthvar = FloatProperty(name="Max Width Var",
+bpy.types.Object.plankwidthvar = FloatProperty(name="Max Width Var",
                     description="Max Width variation of single planks",
                     default=0,
                     min=0,
                     soft_max=4.0,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    longgap = FloatProperty(name="Long Gap",
+bpy.types.Object.longgap = FloatProperty(name="Long Gap",
                     description="Gap between long edges of planks",
                     default=0.002,
                     min=0,
@@ -176,9 +316,10 @@ class FloorBoards(bpy.types.Operator):
                     step=0.01,
                     precision=4,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    shortgap = FloatProperty(name="Short Gap",
+bpy.types.Object.shortgap = FloatProperty(name="Short Gap",
                     description="Gap between short edges of planks",
                     default=0.0005,
                     min=0,
@@ -186,18 +327,20 @@ class FloorBoards(bpy.types.Operator):
                     step=0.01,
                     precision=4,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    thickness = FloatProperty(name="Thickness",
+bpy.types.Object.thickness = FloatProperty(name="Thickness",
                     description="Thickness of planks",
                     default=0.018,
                     soft_max=0.1,
                     step=0.1,
                     precision=3,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    bevel = FloatProperty(name="Bevel",
+bpy.types.Object.bevel = FloatProperty(name="Bevel",
                     description="Bevel width planks",
                     default=0.001,
                     min=0,
@@ -205,156 +348,187 @@ class FloorBoards(bpy.types.Operator):
                     step=0.01,
                     precision=4,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
 
-    offset = FloatProperty(name="Offset",
+bpy.types.Object.offset = FloatProperty(name="Offset",
                     description="Offset per row in Blender Units",
                     default=0.4,
                     min=0,
                     soft_max=2,
                     subtype='DISTANCE',
-                    unit='LENGTH')
+                    unit='LENGTH',
+                    update=updateMesh)
                  
-    randomoffset = BoolProperty(name="Offset random",
+bpy.types.Object.randomoffset = BoolProperty(name="Offset random",
                     description="Uses random values for offset",
-                    default=False)           
+                    default=False,
+                    update=updateMesh)           
 
-    randomseed = IntProperty(name="Random Seed",
+bpy.types.Object.randomseed = IntProperty(name="Random Seed",
                     description="The seed governing random generation",
                     default=0,
-                    min=0)
+                    min=0,
+                    update=updateMesh)
 
-    randomuv = BoolProperty(name="Randomize UVs",
+bpy.types.Object.randomuv = BoolProperty(name="Randomize UVs",
                     description="Randomize the uv-offset of individual planks",
-                    default=True)
+                    default=True,
+                    update=updateMesh)
 
-    modifiers = BoolProperty(name="Add modifiers",
+bpy.types.Object.modify = BoolProperty(name="Add modifiers",
                     description="Add bevel and solidify modifiers to the planks",
-                    default=True)
+                    default=True,
+                    update=updateMesh)
 
-    randrotx = FloatProperty(name="X Rotataion",
-                    description="Randam rotation of individual planks around x-axis",
+bpy.types.Object.randrotx = FloatProperty(name="X Rotation",
+                    description="Random rotation of individual planks around x-axis",
                     default=0,
                     min=0,
                     soft_max=0.01,
                     step=(0.02/180)*PI,
                     precision=4,
                     subtype='ANGLE',
-                    unit='ROTATION')
+                    unit='ROTATION',
+                    update=updateMesh)
 
-    randroty = FloatProperty(name="Y Rotataion",
-                    description="Randam rotation of individual planks around y-axis",
+bpy.types.Object.randroty = FloatProperty(name="Y Rotation",
+                    description="Random rotation of individual planks around y-axis",
                     default=0,
                     min=0,
                     soft_max=0.01,
                     step=(0.02/180)*PI,
                     precision=4,
                     subtype='ANGLE',
-                    unit='ROTATION')
+                    unit='ROTATION',
+                    update=updateMesh)
 
-    randrotz = FloatProperty(name="Z Rotataion",
-                    description="Randam rotation of individual planks around z-axis",
+bpy.types.Object.randrotz = FloatProperty(name="Z Rotation",
+                    description="Random rotation of individual planks around z-axis",
                     default=0,
                     min=0,
                     soft_max=0.01,
                     step=(0.02/180)*PI,
                     precision=4,
                     subtype='ANGLE',
-                    unit='ROTATION')
+                    unit='ROTATION',
+                    update=updateMesh)
+
+bpy.types.Object.hollowlong = FloatProperty(name="Hollowness along plank",
+                    description="Amount of curvature along a plank",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=0.01,
+                    precision=4,
+                    update=updateMesh)
+
+bpy.types.Object.hollowshort = FloatProperty(name="Hollowness across plank",
+                    description="Amount of curvature across a plank",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=0.01,
+                    precision=4,
+                    update=updateMesh)
+
+bpy.types.Object.twist = FloatProperty(name="Twist along plank",
+                    description="Amount of twist along a plank",
+                    default=0,
+                    min=0,
+                    soft_max=0.01,
+                    step=0.01,
+                    precision=4,
+                    update=updateMesh)
+
+
+class FloorBoards(bpy.types.Panel):
+    bl_idname = "FloorBoards"
+    bl_label = "Floorgenerator"
+    bl_space_type  = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context     = "modifier"
+    bl_options     ={'DEFAULT_CLOSED'}
+ 
+    def draw(self, context):
+        layout = self.layout
+        if  bpy.context.mode=='EDIT_MESH':
+            layout.label('Floorgenerator doesn\'t work in the EDIT-Mode.')
+        else:
+            o = context.object
+            if 'reg' in o:
+                if  o['reg']=='FloorBoards':
+                    box = layout.box()
+                    box.prop(o, 'length')
+                    box.prop(o, 'nplanks')
+                   
+                    box = layout.box()
+                    box.prop(o, 'planklength')
+                    box.prop(o, 'planklengthvar')
+                    box.prop(o, 'plankwidth')
+                    box.prop(o, 'plankwidthvar')
+                    box.prop(o, 'thickness')
+                    box.prop(o, 'offset')
+                    box.prop(o, 'randomoffset')
+                    box.prop(o, 'longgap')
+                    box.prop(o, 'shortgap')
+                    box.prop(o, 'bevel')
+                   
+                    box = layout.box()
+                    columns=box.row()
+                    col1=columns.column()
+                    col2=columns.column()
+                    col1.prop(o, 'randrotx')
+                    col1.prop(o, 'randroty')
+                    col1.prop(o, 'randrotz')
+                    col2.prop(o, 'hollowlong')
+                    col2.prop(o, 'hollowshort')
+                    col2.prop(o, 'twist')
+                   
+                    box = layout.box()
+                    box.prop(o, 'randomuv')
+                    box.prop(o, 'modify')
+                    layout.prop(o, 'randomseed')
+                else:layout.operator('mesh.floor_boards_convert')
+            else:layout.operator('mesh.floor_boards_convert')
+
+class FloorBoardsAdd(bpy.types.Operator):
+    bl_idname = "mesh.floor_boards_add"
+    bl_label = "FloorBoards"
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(self, context):
-        # Check if we are in object mode
         return context.mode == 'OBJECT'
 
 
     def execute(self, context):
-        verts, faces, shortedges, longedges = planks(self.nplanks, self.length,
-            self.planklength, self.planklengthvar,
-            self.plankwidth, self.plankwidthvar,
-            self.longgap, self.shortgap,
-            self.offset, self.randomoffset,
-            self.randomseed,
-            self.randrotx, self.randroty, self.randrotz)
-
-        # create mesh &link object to scene
-        mesh = bpy.data.meshes.new('Planks')
-        mesh.from_pydata(verts, [], faces)
-        mesh.update(calc_edges=True)
-
-        # add uv-coords and per face random vertex colors
-        mesh.uv_textures.new()
-        uv_layer = mesh.uv_layers.active.data
-        vertex_colors = mesh.vertex_colors.new().data
-        for poly in mesh.polygons:
-            offset = Vector((rand(),rand(),0)) if self.randomuv else Vector((0,0,0)) 
-            color = [rand(), rand(), rand()]
-            for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
-                uv_layer[loop_index].uv = (coords + offset).xy
-                vertex_colors[loop_index].color = color
-
-        obj_new = bpy.data.objects.new(mesh.name, mesh)
-        base = bpy.context.scene.objects.link(obj_new)
-        for ob in bpy.context.scene.objects:
-            ob.select = False
-        base.select = True
-        bpy.context.scene.objects.active = obj_new
-        
-        if self.modifiers:
-            # add solidify modifier to give planks thickness
-            bpy.ops.object.modifier_add(type='SOLIDIFY')
-            bpy.context.active_object.modifiers[0].thickness = self.thickness
-
-            # add bevel modifier
-            bpy.ops.object.modifier_add(type='BEVEL')
-            bpy.context.active_object.modifiers[1].width = self.bevel
-        
+        bpy.ops.mesh.primitive_cube_add()
+        bpy.ops.mesh.floor_boards_convert('INVOKE_DEFAULT')
         return {'FINISHED'}
-
-    def draw(self, context):
-        layout = self.layout
-
-        box = layout.box()
-        box.prop(self, 'length')
-        box.prop(self, 'nplanks')
         
-        box = layout.box()
-        box.prop(self, 'planklength')
-        box.prop(self, 'planklengthvar')
-        box.prop(self, 'plankwidth')
-        box.prop(self, 'plankwidthvar')
-        box.prop(self, 'thickness')
-        box.prop(self, 'offset')
-        box.prop(self, 'randomoffset')
-        box.prop(self, 'longgap')
-        box.prop(self, 'shortgap')
-        box.prop(self, 'bevel')
-        
-        box = layout.box()
-        box.prop(self, 'randrotx')
-        box.prop(self, 'randroty')
-        box.prop(self, 'randrotz')
-        
-        box = layout.box()
-        box.prop(self, 'randomuv')
-        box.prop(self, 'modifiers')
-        layout.prop(self, 'randomseed')
-
 def menu_func(self, context):
-    self.layout.operator(FloorBoards.bl_idname, text="Add floor board mesh",
+    self.layout.operator(FloorBoardsAdd.bl_idname, text="Add floor board mesh",
                                                 icon='PLUGIN')
 
+class FloorBoardsConvert(bpy.types.Operator) :
+    bl_idname ='mesh.floor_boards_convert'
+    bl_label  ='Convert to Floorobject'
+    bl_options={"UNDO"}
+    def invoke(self,context,event):
+        o=context.object
+        o.reg='FloorBoards'
+        o.length = 4
+        return {"FINISHED"}
 
 def register():
     bpy.utils.register_module(__name__)
+    #bpy.utils.register_class(FloorBoards);
+    #bpy.utils.register_class(FloorBoardsConvert)
     bpy.types.INFO_MT_mesh_add.append(menu_func)
 
 
 def unregister():
     bpy.types.INFO_MT_mesh_add.remove(menu_func)
     bpy.utils.unregister_module(__name__)
-
-
-if __name__ == "__main__":
-    register()
+    #bpy.utils.unregister_class(FloorBoards)
