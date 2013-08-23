@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Generator",
     "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
-    "version": (0, 0, 10),
+    "version": (0, 0, 11),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -243,20 +243,23 @@ def updateMesh(self, context):
             bpy.ops.object.modifier_add(type='SOLIDIFY')
             bpy.ops.object.modifier_add(type='BEVEL')
             bpy.ops.object.modifier_add(type='EDGE_SPLIT')
-            if warped:
-                bpy.ops.object.modifier_add(type='SUBSURF')
             mods = o.modifiers
             mods[0].show_expanded = False
             mods[1].show_expanded = False
             mods[2].show_expanded = False
             mods[0].thickness = self.thickness
             mods[1].width = self.bevel
-    else:  # maybe change this to walk the modifier stack and remove all
-        if warped:
+        if warped and not ('SUBSURF' in [m.type for m in mods]):
+            bpy.ops.object.modifier_add(type='SUBSURF')
+            mods[-1].show_expanded = False
+            mods[-1].levels = 2
+        if not warped and ('SUBSURF' in [m.type for m in mods]):
             bpy.ops.object.modifier_remove(modifier='Subsurf')
-        bpy.ops.object.modifier_remove(modifier='EdgeSplit')
-        bpy.ops.object.modifier_remove(modifier='Bevel')
-        bpy.ops.object.modifier_remove(modifier='Solidify')
+    else:
+        n = len(o.modifiers)
+        while n > 0:
+            n -= 1
+            bpy.ops.object.modifier_remove(modifier=o.modifiers[-1].name)
 
 bpy.types.Object.reg = StringProperty(default='FloorBoards')
 
