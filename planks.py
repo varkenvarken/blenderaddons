@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Generator",
     "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
-    "version": (0, 0, 9),
+    "version": (0, 0, 10),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -365,7 +365,7 @@ bpy.types.Object.offset = FloatProperty(name="Offset",
 
 bpy.types.Object.randomoffset = BoolProperty(name="Offset random",
                                              description="Uses random values for offset",
-                                             default=False,
+                                             default=True,
                                              update=updateMesh)
 
 bpy.types.Object.randomseed = IntProperty(name="Random Seed",
@@ -462,22 +462,25 @@ class FloorBoards(bpy.types.Panel):
             if 'reg' in o:
                 if o['reg'] == 'FloorBoards':
                     box = layout.box()
+                    box.label('Floordimensions:')
                     box.prop(o, 'length')
                     box.prop(o, 'nplanks')
 
-                    box = layout.box()
+                    box.label('Planks:')
                     box.prop(o, 'planklength')
                     box.prop(o, 'planklengthvar')
                     box.prop(o, 'plankwidth')
                     box.prop(o, 'plankwidthvar')
                     box.prop(o, 'thickness')
-                    box.prop(o, 'offset')
-                    box.prop(o, 'randomoffset')
+                    row = box.row()
+                    row.prop(o, 'randomoffset')
+                    if o.randomoffset is False:
+                        row.prop(o, 'offset')
+
                     box.prop(o, 'longgap')
                     box.prop(o, 'shortgap')
                     box.prop(o, 'bevel')
 
-                    box = layout.box()
                     columns = box.row()
                     col1 = columns.column()
                     col2 = columns.column()
@@ -488,10 +491,12 @@ class FloorBoards(bpy.types.Panel):
                     col2.prop(o, 'hollowshort')
                     col2.prop(o, 'twist')
 
-                    box = layout.box()
-                    box.prop(o, 'randomuv')
-                    box.prop(o, 'modify')
-                    layout.prop(o, 'randomseed')
+                    box.prop(o, 'randomseed')
+
+                    box.label('Miscellaneous:')
+                    row = box.row()
+                    row.prop(o, 'randomuv')
+                    row.prop(o, 'modify')
                 else:
                     layout.operator('mesh.floor_boards_convert')
             else:
@@ -532,12 +537,9 @@ class FloorBoardsConvert(bpy.types.Operator):
 
 def register():
     bpy.utils.register_module(__name__)
-    #bpy.utils.register_class(FloorBoards);
-    #bpy.utils.register_class(FloorBoardsConvert)
     bpy.types.INFO_MT_mesh_add.append(menu_func)
 
 
 def unregister():
     bpy.types.INFO_MT_mesh_add.remove(menu_func)
     bpy.utils.unregister_module(__name__)
-    #bpy.utils.unregister_class(FloorBoards)
