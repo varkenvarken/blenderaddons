@@ -475,10 +475,13 @@ class FloorBoards(bpy.types.Panel):
                     box.prop(o, 'plankwidth')
                     box.prop(o, 'plankwidthvar')
                     box.prop(o, 'thickness')
-                    row = box.row()
-                    row.prop(o, 'randomoffset')
-                    if o.randomoffset is False:
-                        row.prop(o, 'offset')
+                    columns = box.row()
+                    col1 = columns.column()
+                    col2 = columns.column()
+                    col1.prop(o, 'offset')
+                    col2.prop(o, 'randomoffset')
+                    if o.randomoffset is True:
+                        col1.enabled = False
 
                     box.prop(o, 'longgap')
                     box.prop(o, 'shortgap')
