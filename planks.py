@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Generator",
     "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
-    "version": (0, 0, 11),
+    "version": (0, 0, 12),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -93,8 +93,8 @@ def planks(n, m,
         w = width + randuni(0, widthvar)
         we = ws + w
         if randomoffset:
-            e = randuni(0, length)  # I think we should change length into offset. That way we have indepent control of of the offset variation
-        while e < m:
+            e = randuni(4 * shortgap, length)  # we don't like negative plank lengths
+        while (m - e) > (4 * shortgap):
             ll = len(verts)
             rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
             verts.extend(plank(s, e, ws, we, longgap, shortgap, rot))
@@ -276,6 +276,7 @@ bpy.types.Object.nplanks = IntProperty(name="Number of rows",
                                        description="Number of rows (the width)",
                                        default=5,
                                        soft_min=1,
+                                       soft_max=50,
                                        update=updateMesh)
 
 bpy.types.Object.planklength = FloatProperty(name="Plank Length",
