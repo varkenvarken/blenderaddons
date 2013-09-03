@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 1),
+    "version": (0, 0, 2),
     "blender": (2, 68, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
@@ -33,7 +33,7 @@ bl_info = {
     "tracker_url": "",
     "category": "Add Mesh"}
 
-from math import pi as PI, sin, cos
+from math import pi as PI, sin, cos, atan2, degrees
 import bpy
 import bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty, StringProperty
@@ -118,30 +118,43 @@ def rotate_mesh(object, euler):
 
 # TODO this can fail if gearhead is removed/ chain of dependencies is broken    
 def setLocation(object, context, seen, rot_changed):
+    print('setLocation', object.name)
     offset = 0
+    rotation = 0
     if object.driver != '':
-        rootradius, rootnteeth, offset = setLocation(context.scene.objects[object.driver], context, seen, rot_changed)
+        rootradius, rootnteeth, offset, driverrotation = setLocation(context.scene.objects[object.driver], context, seen, rot_changed)
+        d = relradius(rootradius, context.scene.objects[object.driver].nteeth, rootnteeth) + relradius(rootradius, object.nteeth, rootnteeth)
+        nx = d * cos(object.rotation)
+        ny = d * sin(object.rotation)
+        ratio = context.scene.objects[object.driver].nteeth / float(object.nteeth)
+        rotation = object.rotation * (1.0 + ratio) - driverrotation * ratio
         if object.name not in seen:
             if object.twin == 'Up':
                 offset += 1
             elif object.twin == 'Down':
                 offset -= 1
+            
             object.location = context.scene.objects[object.driver].location
             if object.twin == 'None':  # ! string not None object
-                object.location.x += relradius(rootradius, context.scene.objects[object.driver].nteeth, rootnteeth) + relradius(rootradius, object.nteeth, rootnteeth)
+                object.location.x += nx
+                object.location.y += ny
+                print(object.name, degrees(rotation), degrees(driverrotation), context.scene.objects[object.driver].nteeth, object.nteeth )
             object.location.z += offset * 0.1
             #print(object.name, '-->', object.driver, 'driver changed',object.driver in rot_changed, 'odd', object.nteeth % 2 == 1, 'rotated', rot_changed,'seen', seen)
             if ((object.driver in rot_changed) and (object.nteeth % 2 == 1)
                     or
                 (object.driver not in rot_changed) and (object.nteeth % 2 == 0)):
-                    rotate_mesh(object, Euler((0,0,PI / object.nteeth), 'XYZ'))  # half a tooth
+                    rotate_mesh(object, Euler((0, 0, PI / object.nteeth + rotation), 'XYZ'))  # half a tooth + additional rotation
                     rot_changed.add(object.name)
                     #print('ob rotated')
+            else:
+                rotate_mesh(object, Euler((0, 0, rotation), 'XYZ'))  # additional rotation
     else:
         object.location = Vector((0, 0, 0))
         rootradius, rootnteeth = object.radius, object.nteeth
     seen.add(object.name)
-    return rootradius, rootnteeth, offset
+    print('setLocation',offset,rotation)
+    return rootradius, rootnteeth, offset, rotation
 
 # this fails if there is more than one gear train
 def unParentFromEmpty(gears, context):
@@ -279,6 +292,13 @@ bpy.types.Object.nteeth = IntProperty(name="Number of teeth",
 
 bpy.types.Object.twin = EnumProperty(items=[('None','None','None',0), ('Up','Up','Up',1), ('Down','Down','Down',2)], update=updateMesh)
 
+bpy.types.Object.rotation = FloatProperty(name="Rotation",
+                                        description="Rotation along edge of driving gear",
+                                        default=0,
+                                        subtype='ANGLE',
+                                        unit='ROTATION',
+                                        update=updateMesh)
+
 bpy.types.Object.driver = EnumProperty(items=availableGears , update=updateMesh)
 
 class Gears(bpy.types.Panel):
@@ -301,9 +321,12 @@ class Gears(bpy.types.Panel):
                     col = layout.column()
                     col.prop(o, 'radius')
                     col.enabled = o.driver == ''
+                    
                     col = layout.column()
+                    col.prop(o, 'rotation')
                     col.prop(o, 'twin')
                     col.enabled = o.driver != ''
+                    
                     layout.prop(o, 'driver')
                     layout.operator('mesh.gear2_add')
                 else:
