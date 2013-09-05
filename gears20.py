@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 2),
+    "version": (0, 0, 3),
     "blender": (2, 68, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
@@ -33,18 +33,21 @@ bl_info = {
     "tracker_url": "",
     "category": "Add Mesh"}
 
-from math import pi as PI, sin, cos, atan2, degrees
+from math import pi as PI, sin, cos, atan2, degrees, radians
 import bpy
 import bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty, StringProperty
 from mathutils import Vector, Euler
 
+
 def availableGears(o, context):
-    return [('','','',0)]+[(name, name, name, n+2) for n,name in enumerate(bpy.data.objects.keys()) if (('reg' in bpy.data.objects[name]) and (bpy.data.objects[name].reg == 'Gears') and (name != o.name))]
+    return [('', '', '', 0)] + [(name, name, name, n + 2) for n, name in enumerate(bpy.data.objects.keys()) if (('reg' in bpy.data.objects[name]) and (bpy.data.objects[name].reg == 'Gears') and (name != o.name))]
+
 
 def isGear(o):
     return o is not None and 'reg' in o and o.reg == 'Gears'
-    
+
+
 # Vector.rotate() does NOT return anything, contrary to what the docs say
 # docs are now fixed (https://projects.blender.org/tracker/index.php?func=detail&aid=36518&group_id=9&atid=498)
 # but unfortunately no rotated() function was added
@@ -53,44 +56,46 @@ def rotate(v, r):
     v2.rotate(r)
     return v2
 
+
 def tooth(radius, arc):
     bm = bmesh.new()
 
     h = arc / 4
-    c0 = cos(h/2)
-    s0 = sin(h/2)
+    c0 = cos(h / 2)
+    s0 = sin(h / 2)
     c1 = cos(h)
     s1 = sin(h)
-    c2 = cos(h*2)
-    s2 = sin(h*2)
+    c2 = cos(h * 2)
+    s2 = sin(h * 2)
     r0 = radius * 0.5
     r1 = radius - 0.2
     r2 = radius
     r3 = radius + 0.19
-    
+
     verts = [
-        ( r0 * c2,  r0 * s2, 0),  # 0
-        ( r0 * c1,  r0 * s1, 0),  # 1
-        ( r0 * c1, -r0 * s1, 0),  # 2
-        ( r0 * c2, -r0 * s2, 0),  # 3
-        ( r1 * c2,  r1 * s2, 0),  # 4
-        ( r1 * c1,  r1 * s1, 0),  # 5
-        ( r1 * c1, -r1 * s1, 0),  # 6
-        ( r1 * c2, -r1 * s2, 0),  # 7
-        ( r2 * c1,  r2 * s1, 0),  # 8
-        ( r2 * c1, -r2 * s1, 0),  # 9
-        ( r3 * c0,  r3 * s0, 0),  # 10
-        ( r3 * c0, -r3 * s0, 0)   # 11
+        (r0 * c2, r0 * s2, 0),  # 0
+        (r0 * c1, r0 * s1, 0),  # 1
+        (r0 * c1, -r0 * s1, 0),  # 2
+        (r0 * c2, -r0 * s2, 0),  # 3
+        (r1 * c2, r1 * s2, 0),  # 4
+        (r1 * c1, r1 * s1, 0),  # 5
+        (r1 * c1, -r1 * s1, 0),  # 6
+        (r1 * c2, -r1 * s2, 0),  # 7
+        (r2 * c1, r2 * s1, 0),  # 8
+        (r2 * c1, -r2 * s1, 0),  # 9
+        (r3 * c0, r3 * s0, 0),  # 10
+        (r3 * c0, -r3 * s0, 0)   # 11
     ]
     faces = [
         (0, 1, 2, 3, 7, 6, 9, 11, 10, 8, 5, 4)
     ]
-    
+
     for v in verts:
         bm.verts.new(v)
     for f in faces:
         bm.faces.new([bm.verts[i] for i in f])
     return bm
+
 
 def rootArc(object):
     if 'reg' in object and object.reg == 'Gears':
@@ -100,23 +105,27 @@ def rootArc(object):
             parent = bpy.data.objects[object.driver]
             return rootArc(parent)
     return 1.0, 4
-    
+
+
 def focus(object, context):
     bpy.ops.object.select_all(action='DESELECT')
     object.select = True
     context.scene.objects.active = object
 
+
 def relradius(rootr, nt, nrt):
     return (rootr * nt) / nrt
+
 
 def rotate_mesh(object, euler):
     bm = bmesh.new()
     bm.from_mesh(object.data)
-    bmesh.ops.rotate(bm, cent=(0,0,0), matrix=euler.to_matrix(), verts=bm.verts[:])
+    bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=euler.to_matrix(), verts=bm.verts[:])
     bm.to_mesh(object.data)
     bm.free()
 
-# TODO this can fail if gearhead is removed/ chain of dependencies is broken    
+
+# TODO this can fail if gearhead is removed/ chain of dependencies is broken
 def setLocation(object, context, seen, rot_changed):
     print('setLocation', object.name)
     offset = 0
@@ -133,17 +142,15 @@ def setLocation(object, context, seen, rot_changed):
                 offset += 1
             elif object.twin == 'Down':
                 offset -= 1
-            
+
             object.location = context.scene.objects[object.driver].location
             if object.twin == 'None':  # ! string not None object
                 object.location.x += nx
                 object.location.y += ny
-                print(object.name, degrees(rotation), degrees(driverrotation), context.scene.objects[object.driver].nteeth, object.nteeth )
+                print(object.name, degrees(rotation), degrees(driverrotation), context.scene.objects[object.driver].nteeth, object.nteeth)
             object.location.z += offset * 0.1
             #print(object.name, '-->', object.driver, 'driver changed',object.driver in rot_changed, 'odd', object.nteeth % 2 == 1, 'rotated', rot_changed,'seen', seen)
-            if ((object.driver in rot_changed) and (object.nteeth % 2 == 1)
-                    or
-                (object.driver not in rot_changed) and (object.nteeth % 2 == 0)):
+            if ((object.driver in rot_changed) and (object.nteeth % 2 == 1) or (object.driver not in rot_changed) and (object.nteeth % 2 == 0)):
                     rotate_mesh(object, Euler((0, 0, PI / object.nteeth + rotation), 'XYZ'))  # half a tooth + additional rotation
                     rot_changed.add(object.name)
                     #print('ob rotated')
@@ -153,8 +160,11 @@ def setLocation(object, context, seen, rot_changed):
         object.location = Vector((0, 0, 0))
         rootradius, rootnteeth = object.radius, object.nteeth
     seen.add(object.name)
-    print('setLocation',offset,rotation)
+    print('setLocation', offset, rotation)
+    object.rotation_mode = 'ZYX'
+    object.rotation_euler = (object.flip, 0, 0)
     return rootradius, rootnteeth, offset, rotation
+
 
 # this fails if there is more than one gear train
 def unParentFromEmpty(gears, context):
@@ -166,7 +176,8 @@ def unParentFromEmpty(gears, context):
             g.parent = None
             #g.matrix_world
     return empty
-    
+
+
 def parentToEmpty(gears, empty, context):
     newempty = False
     if empty is None:
@@ -187,11 +198,13 @@ def parentToEmpty(gears, empty, context):
         #g.matrix_world = mat
     if newempty:
         empty.location = context.scene.cursor_location
-        
+
+
 def clearDriversAndKeys(gears, context):
     for g in gears:
         g.animation_data_clear()
         g.rotation_euler.zero()
+
 
 def setDriversAndKeys(gears, context):
     # set keyframes for head and drivers for driven gears
@@ -199,13 +212,13 @@ def setDriversAndKeys(gears, context):
         if g.driver != '':  # driven gear
             ratio = 1
             if g.twin == 'None':  # the string not the object None!
-                ratio = -float(bpy.data.objects[g.driver].nteeth)/float(g.nteeth)
+                ratio = -float(bpy.data.objects[g.driver].nteeth) / float(g.nteeth)
 
             # add driver to Z rotation
             driver = g.driver_add('rotation_euler', 2)
             driver.driver.type = 'SCRIPTED'
             driver.driver.expression = str(ratio) + '* bpy.data.objects["' + g.driver + '"].rotation_euler.z'
-            
+
             # add/replace variable just to make updates instantaneous
             variable = None
             for v in driver.driver.variables:
@@ -216,24 +229,25 @@ def setDriversAndKeys(gears, context):
                 variable = driver.driver.variables.new()
             variable.type = 'TRANSFORMS'
             variable.targets[0].id = context.scene.objects[g.driver]
-            variable.targets[0].transform_type = 'ROT_Z' # actually it doesn't matter what we monitor
-        else: # the gear head
+            variable.targets[0].transform_type = 'ROT_Z'  # actually it doesn't matter what we monitor
+        else:  # the gear head
             # add keyframes on the Z rotation
             g.rotation_euler.z = 0
             g.keyframe_insert(data_path="rotation_euler", index=2, frame=-10)
             g.animation_data.action.fcurves[0].keyframe_points[-1].handle_right_type = 'FREE'
             g.animation_data.action.fcurves[0].keyframe_points[-1].handle_left_type = 'FREE'
-            g.rotation_euler.z = 0.5 * PI*10
-            g.keyframe_insert(data_path="rotation_euler", index=2, frame=25*10)
+            g.rotation_euler.z = 0.5 * PI * 10
+            g.keyframe_insert(data_path="rotation_euler", index=2, frame=25 * 10)
             # doesnt work? : g.animation_data.action.fcurves[0].extrapolation = 'LINEAR'
             g.animation_data.action.fcurves[0].keyframe_points[-1].handle_right_type = 'FREE'
             g.animation_data.action.fcurves[0].keyframe_points[-1].handle_left_type = 'FREE'
-            
+
+
 def updateObjects(context):
     gears = [o for o in context.scene.objects if 'reg' in o and o.reg == 'Gears']
     empty = unParentFromEmpty(gears, context)
     clearDriversAndKeys(gears, context)
-    
+
     # create/replace meshes
     for g in gears:
         rootradius, rootteeth = rootArc(g)
@@ -249,15 +263,32 @@ def updateObjects(context):
             axis=(0.0, 0.0, 1.0),
             cent=(0.0, 0.0, 0.0))
         bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=0.0001)
-        ret = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:])
-        bmesh.ops.translate(bm, verts=[ele for ele in ret["geom"] if isinstance(ele, bmesh.types.BMVert)], vec=(0.0, 0.0, 0.1))
-        del ret
-        
+        nsteps = int(max(1, abs(g.helicalangle) / radians(10)))
+        bmesh.ops.spin(
+            bm,
+            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
+            angle=g.helicalangle,
+            steps=nsteps,
+            use_duplicate=False,
+            dvec=(0.0, 0.0, g.width / nsteps),
+            axis=(0.0, 0.0, 1.0),
+            cent=(0.0, 0.0, 0.0))
+        #ret = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:])
+        #bmesh.ops.translate(bm, verts=[ele for ele in ret["geom"] if isinstance(ele, bmesh.types.BMVert)], vec=(0.0, 0.0, g.width))
+        #del ret
+
+        #bmesh.ops.rotate(
+        #    bm,
+        #    verts=bm.verts[:],
+        #    cent=(0, 0, 0),
+        #    matrix=Euler((g.flip, 0.0, 0.0), 'XYZ').to_matrix())
+        #    # keyword space is invalid for this operator, bug? space=g.matrix_basis
+
         me = bpy.data.meshes.new("Gear")
         bm.to_mesh(me)
         bm.free()
         g.data = me
-            
+
     # rotate gears so that teeth fit
     location_set = set()
     rotated_set = set()
@@ -267,12 +298,13 @@ def updateObjects(context):
 
     parentToEmpty(gears, empty, context)
     setDriversAndKeys(gears, context)
-                
+
+
 def updateMesh(self, context):
     object = context.object
     updateObjects(context)
     focus(object, context)
-    
+
 bpy.types.Object.reg = StringProperty(default='Gears')
 
 bpy.types.Object.radius = FloatProperty(name="Radius",
@@ -284,22 +316,46 @@ bpy.types.Object.radius = FloatProperty(name="Radius",
                                         unit='LENGTH',
                                         update=updateMesh)
 
-bpy.types.Object.nteeth = IntProperty(name="Number of teeth",
-                                       description="Number of teeth",
-                                       default=12,
-                                       soft_min=4,
+bpy.types.Object.width = FloatProperty(name="Width",
+                                       description="Width of gear",
+                                       default=0.2,
+                                       soft_min=0.1,
+                                       soft_max=40.0,
+                                       subtype='DISTANCE',
+                                       unit='LENGTH',
                                        update=updateMesh)
 
-bpy.types.Object.twin = EnumProperty(items=[('None','None','None',0), ('Up','Up','Up',1), ('Down','Down','Down',2)], update=updateMesh)
+bpy.types.Object.nteeth = IntProperty(name="Number of teeth",
+                                      description="Number of teeth",
+                                      default=12,
+                                      soft_min=4,
+                                      update=updateMesh)
+
+bpy.types.Object.helicalangle = FloatProperty(name="Helical angle",
+                                              description="Helical angle",
+                                              default=0,
+                                              subtype='ANGLE',
+                                              unit='ROTATION',
+                                              update=updateMesh)
+
+bpy.types.Object.twin = EnumProperty(items=[('None', 'None', 'None', 0), ('Up', 'Up', 'Up', 1), ('Down', 'Down', 'Down', 2)], update=updateMesh)
 
 bpy.types.Object.rotation = FloatProperty(name="Rotation",
-                                        description="Rotation along edge of driving gear",
-                                        default=0,
-                                        subtype='ANGLE',
-                                        unit='ROTATION',
-                                        update=updateMesh)
+                                          description="Rotation along edge of driving gear",
+                                          default=0,
+                                          subtype='ANGLE',
+                                          unit='ROTATION',
+                                          update=updateMesh)
 
-bpy.types.Object.driver = EnumProperty(items=availableGears , update=updateMesh)
+bpy.types.Object.flip = FloatProperty(name="Flip",
+                                      description="Rotation along around line of gear train",
+                                      default=0,
+                                      subtype='ANGLE',
+                                      unit='ROTATION',
+                                      update=updateMesh)
+
+bpy.types.Object.driver = EnumProperty(items=availableGears, update=updateMesh)
+
 
 class Gears(bpy.types.Panel):
     bl_idname = "gears2"
@@ -318,15 +374,18 @@ class Gears(bpy.types.Panel):
             if 'reg' in o:
                 if o['reg'] == 'Gears':
                     layout.prop(o, 'nteeth')
+                    layout.prop(o, 'width')
+                    layout.prop(o, 'helicalangle')
                     col = layout.column()
                     col.prop(o, 'radius')
                     col.enabled = o.driver == ''
-                    
+
                     col = layout.column()
                     col.prop(o, 'rotation')
+                    col.prop(o, 'flip')
                     col.prop(o, 'twin')
                     col.enabled = o.driver != ''
-                    
+
                     layout.prop(o, 'driver')
                     layout.operator('mesh.gear2_add')
                 else:
@@ -349,18 +408,22 @@ class GearAdd(bpy.types.Operator):
         bpy.ops.mesh.primitive_cube_add()
         context.active_object.name = 'Gear'
         print('GearAdd')
-        
+
         if isGear(current):
-            print('current is gear',current.name)
+            print('current is gear', current.name)
             newgear = context.active_object
             newgear.driver = current.name
             newgear.reg = 'Gears'
-            bpy.ops.mesh.gear2_convert(
-                {'object':newgear, 'active_object':newgear, 
+            bpy.ops.mesh.gear2_convert({
+                'object': newgear,
+                'active_object': newgear,
                 # IMHO the following keys wouldn't be needed because this dict is an override, but Blender prints al sorts of messages if I leave these out (2.68a)
-                'scene':context.scene, 'blend_data':context.blend_data,
-                'window':context.window, 'screen':context.screen,
-                'area':context.area, 'region':context.region},
+                'scene': context.scene,
+                'blend_data': context.blend_data,
+                'window': context.window,
+                'screen': context.screen,
+                'area': context.area,
+                'region': context.region},
                 'INVOKE_DEFAULT')
         else:
             bpy.ops.mesh.gear2_convert('INVOKE_DEFAULT')
