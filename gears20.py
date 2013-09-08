@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 3),
+    "version": (0, 0, 4),
     "blender": (2, 68, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
@@ -57,7 +57,7 @@ def rotate(v, r):
     return v2
 
 
-def tooth(radius, arc):
+def tooth(radius, arc, geartype):
     bm = bmesh.new()
 
     h = arc / 4
@@ -67,11 +67,17 @@ def tooth(radius, arc):
     s1 = sin(h)
     c2 = cos(h * 2)
     s2 = sin(h * 2)
+    
     r0 = radius * 0.5
     r1 = radius - 0.2
     r2 = radius
     r3 = radius + 0.19
-
+    if geartype == 'Internal':
+        r0 = radius + 0.19 + 0.2
+        r1 = radius + 0.2
+        r2 = radius
+        r3 = radius - 0.19
+    
     verts = [
         (r0 * c2, r0 * s2, 0),  # 0
         (r0 * c1, r0 * s1, 0),  # 1
@@ -132,7 +138,11 @@ def setLocation(object, context, seen, rot_changed):
     rotation = 0
     if object.driver != '':
         rootradius, rootnteeth, offset, driverrotation = setLocation(context.scene.objects[object.driver], context, seen, rot_changed)
-        d = relradius(rootradius, context.scene.objects[object.driver].nteeth, rootnteeth) + relradius(rootradius, object.nteeth, rootnteeth)
+        d = relradius(rootradius, context.scene.objects[object.driver].nteeth, rootnteeth)
+        if object.geartype == 'Internal':
+            d -= relradius(rootradius, object.nteeth, rootnteeth)
+        else:
+            d += relradius(rootradius, object.nteeth, rootnteeth)
         nx = d * cos(object.rotation)
         ny = d * sin(object.rotation)
         ratio = context.scene.objects[object.driver].nteeth / float(object.nteeth)
@@ -213,7 +223,8 @@ def setDriversAndKeys(gears, context):
             ratio = 1
             if g.twin == 'None':  # the string not the object None!
                 ratio = -float(bpy.data.objects[g.driver].nteeth) / float(g.nteeth)
-
+                if g.geartype == 'Internal':
+                    ratio = -ratio
             # add driver to Z rotation
             driver = g.driver_add('rotation_euler', 2)
             driver.driver.type = 'SCRIPTED'
@@ -253,7 +264,7 @@ def updateObjects(context):
         rootradius, rootteeth = rootArc(g)
         radius = (rootradius * g.nteeth) / rootteeth
         arc = 2 * PI / g.nteeth
-        bm = tooth(radius, arc)
+        bm = tooth(radius, arc, g.geartype)
         bmesh.ops.spin(
             bm,
             geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
@@ -356,6 +367,7 @@ bpy.types.Object.flip = FloatProperty(name="Flip",
 
 bpy.types.Object.driver = EnumProperty(items=availableGears, update=updateMesh)
 
+bpy.types.Object.geartype = EnumProperty(items=(('Regular', 'Regular', 'Regular (including helical and worm)'), ('Internal', 'Internal', 'Internal')), update=updateMesh)
 
 class Gears(bpy.types.Panel):
     bl_idname = "gears2"
@@ -373,6 +385,7 @@ class Gears(bpy.types.Panel):
             o = context.object
             if 'reg' in o:
                 if o['reg'] == 'Gears':
+                    layout.prop(o, 'geartype')
                     layout.prop(o, 'nteeth')
                     layout.prop(o, 'width')
                     layout.prop(o, 'helicalangle')
