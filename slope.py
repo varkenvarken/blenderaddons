@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Slope",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 2),
+    "version": (0, 0, 3),
     "blender": (2, 68, 0),
     "location": "View3D > Weights > Slope  and  View3D > Paint > Slope",
     "description": "Replace active vertex group or vertex color layer with values representing the slope of a vertex",
@@ -33,31 +33,34 @@ bl_info = {
     "tracker_url": "",
     "category": "Mesh"}
 
+from math import pi, pow
+from re import search
 import bpy
 from mathutils import Vector
-from math import pi, pow
+
 
 class Slope:
-    
+
     def weight(self, normal):
         angle = normal.angle(Vector((0, 0, 1)))
-        if self.mirror and angle > pi/2:
+        if self.mirror and angle > pi / 2:
             angle = pi - angle
         weight = 0.0
         if angle <= self.low:
             weight = 1.0
         elif angle <= self.high:
-            weight = 1 - (angle - self.low) / ( self.high - self.low )
+            weight = 1 - (angle - self.low) / (self.high - self.low)
             weight = pow(weight, self.power)
         return weight
-        
+
+
 class Slope2VGroup(bpy.types.Operator, Slope):
     bl_idname = "mesh.slope2vgroup"
     bl_label = "Slope2VGroup"
     bl_options = {'REGISTER', 'UNDO'}
 
     low = bpy.props.FloatProperty(name="Lower limit", description="Angles smaller than this get a unit weight", subtype="ANGLE", default=0, max=pi, min=0)
-    high = bpy.props.FloatProperty(name="Upper limit", description="Angles larger than this get a zero weight", subtype="ANGLE", default=pi/2, max=pi, min=0.01)
+    high = bpy.props.FloatProperty(name="Upper limit", description="Angles larger than this get a zero weight", subtype="ANGLE", default=pi / 2, max=pi, min=0.01)
     power = bpy.props.FloatProperty(name="Power", description="Shape of mapping curve", default=1, min=0, max=10)
     mirror = bpy.props.BoolProperty(name="Mirror", description="Limit angle to 90 degrees", default=False)
 
@@ -67,7 +70,7 @@ class Slope2VGroup(bpy.types.Operator, Slope):
              isinstance(context.scene.objects.active, bpy.types.Object) and
              isinstance(context.scene.objects.active.data, bpy.types.Mesh))
         return p
-        
+
     def execute(self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
         ob = context.active_object
@@ -91,9 +94,10 @@ class Slope2VCol(bpy.types.Operator, Slope):
     bl_options = {'REGISTER', 'UNDO'}
 
     low = bpy.props.FloatProperty(name="Lower limit", description="Angles smaller than this get a unit weight", subtype="ANGLE", default=0, max=pi, min=0)
-    high = bpy.props.FloatProperty(name="Upper limit", description="Angles larger than this get a zero weight", subtype="ANGLE", default=pi/2, max=pi, min=0.01)
+    high = bpy.props.FloatProperty(name="Upper limit", description="Angles larger than this get a zero weight", subtype="ANGLE", default=pi / 2, max=pi, min=0.01)
     power = bpy.props.FloatProperty(name="Power", description="Shape of mapping curve", default=1, min=0, max=10)
     mirror = bpy.props.BoolProperty(name="Mirror", description="Limit angle to 90 degrees", default=False)
+    curve = bpy.props.BoolProperty(name="Use brush curve", description="Apply brush curve after calculculating values", default=False)
 
     @classmethod
     def poll(self, context):
@@ -101,19 +105,38 @@ class Slope2VCol(bpy.types.Operator, Slope):
              isinstance(context.scene.objects.active, bpy.types.Object) and
              isinstance(context.scene.objects.active.data, bpy.types.Mesh))
         return p
-        
+
     def execute(self, context):
-        bpy.ops.object.mode_set(mode='OBJECT')
+        if self.curve:
+            # see: https://projects.blender.org/tracker/index.php?func=detail&aid=36688
+            bcurvemap = context.tool_settings.vertex_paint.brush.curve
+            bcurvemap.initialize()
+            bcurve = bcurvemap.curves[0]
         mesh = context.scene.objects.active.data
         vertex_colors = mesh.vertex_colors.active.data
         for poly in mesh.polygons:
             for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                vertex_colors[loop_index].color = [self.weight(poly.normal), 0, 0]
+                weight = self.weight(poly.normal)
+                if self.curve:
+                    weight = bcurve.evaluate(1.0 - weight)
+                vertex_colors[loop_index].color = [weight, 0, 0]
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         context.scene.update()
         return {'FINISHED'}
+
+    def draw(self, context):  # provide a draw function here to show use brush option only with versions dat have the new initialize function
+        layout = self.layout
+        if not self.curve:
+            layout.prop(self, 'low')
+            layout.prop(self, 'high')
+            layout.prop(self, 'power')
+        layout.prop(self, 'mirror')
+        # checking for a specific build is a bit tricky as it may contain other chars than just digits
+        if int(search(r'\d+', str(bpy.app.build_revision)).group(0)) > 60054:
+            layout.prop(self, 'curve')
+            layout.label('Click Paint -> Slope to see effect')
 
 
 def menu_func_weight(self, context):
@@ -138,4 +161,3 @@ def unregister():
     bpy.types.IVIEW3D_MT_paint_vertex.remove(menu_func_vcol)
     bpy.utils.unregister_class(Slope2VCol)
     bpy.utils.unregister_class(Slope2VGroup)
-    
