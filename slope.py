@@ -24,10 +24,10 @@
 bl_info = {
     "name": "Slope",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 3),
+    "version": (0, 0, 4),
     "blender": (2, 68, 0),
     "location": "View3D > Weights > Slope  and  View3D > Paint > Slope",
-    "description": "Replace active vertex group or vertex color layer with values representing the slope of a vertex",
+    "description": "Replace active vertex group or vertex color layer with values representing the slope of a face",
     "warning": "",
     "wiki_url": "",
     "tracker_url": "",
@@ -41,8 +41,8 @@ from mathutils import Vector
 
 class Slope:
 
-    def weight(self, normal):
-        angle = normal.angle(Vector((0, 0, 1)))
+    def weight(self, normal, reference=Vector((0, 0, 1))):
+        angle = normal.angle(reference)
         if self.mirror and angle > pi / 2:
             angle = pi - angle
         weight = 0.0
@@ -63,6 +63,7 @@ class Slope2VGroup(bpy.types.Operator, Slope):
     high = bpy.props.FloatProperty(name="Upper limit", description="Angles larger than this get a zero weight", subtype="ANGLE", default=pi / 2, max=pi, min=0.01)
     power = bpy.props.FloatProperty(name="Power", description="Shape of mapping curve", default=1, min=0, max=10)
     mirror = bpy.props.BoolProperty(name="Mirror", description="Limit angle to 90 degrees", default=False)
+    worldspace = bpy.props.BoolProperty(name="World space", description="Use world space instead of object space coordinates", default=False)
 
     @classmethod
     def poll(self, context):
@@ -74,13 +75,17 @@ class Slope2VGroup(bpy.types.Operator, Slope):
     def execute(self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
         ob = context.active_object
+        wmat = ob.matrix_world
         vertex_group = ob.vertex_groups.active
         if vertex_group is None:
             bpy.ops.object.vertex_group_add()
             vertex_group = ob.vertex_groups.active
         mesh = ob.data
+        reference = Vector((0, 0, 1))
+        if self.worldspace:
+            reference = reference * wmat
         for v in mesh.vertices:
-            vertex_group.add([v.index], self.weight(v.normal), 'REPLACE')
+            vertex_group.add([v.index], self.weight(v.normal, reference), 'REPLACE')
         bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
@@ -98,6 +103,8 @@ class Slope2VCol(bpy.types.Operator, Slope):
     power = bpy.props.FloatProperty(name="Power", description="Shape of mapping curve", default=1, min=0, max=10)
     mirror = bpy.props.BoolProperty(name="Mirror", description="Limit angle to 90 degrees", default=False)
     curve = bpy.props.BoolProperty(name="Use brush curve", description="Apply brush curve after calculculating values", default=False)
+    normal = bpy.props.BoolProperty(name="Map normal", description="Convert face normal to vertex colors instead of slope angle", default=False)
+    worldspace = bpy.props.BoolProperty(name="World space", description="Use world space instead of object space coordinates", default=False)
 
     @classmethod
     def poll(self, context):
@@ -112,31 +119,47 @@ class Slope2VCol(bpy.types.Operator, Slope):
             bcurvemap = context.tool_settings.vertex_paint.brush.curve
             bcurvemap.initialize()
             bcurve = bcurvemap.curves[0]
+        wmat = context.scene.objects.active.matrix_world
         mesh = context.scene.objects.active.data
         vertex_colors = mesh.vertex_colors.active.data
         for poly in mesh.polygons:
             for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                weight = self.weight(poly.normal)
-                if self.curve:
-                    weight = bcurve.evaluate(1.0 - weight)
-                vertex_colors[loop_index].color = [weight, 0, 0]
+                pnormal = poly.normal
+                if self.normal:
+                    if self.worldspace:
+                        pnormal = wmat * pnormal
+                    vertex_colors[loop_index].color = list(map(lambda x: (x + 1) / 2, pnormal.normalized()))  # afaik a normal is not necessarily normalized
+                else:
+                    if self.worldspace:
+                        weight = self.weight(pnormal, Vector((0, 0, 1)) * wmat)
+                    else:
+                        weight = self.weight(pnormal)
+                    if self.curve:
+                        weight = bcurve.evaluate(1.0 - weight)
+                    vertex_colors[loop_index].color = [weight, weight, weight]
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         context.scene.update()
         return {'FINISHED'}
 
-    def draw(self, context):  # provide a draw function here to show use brush option only with versions dat have the new initialize function
+    def draw(self, context):  # provide a draw function here to show use brush option only with versions that have the new initialize function
         layout = self.layout
-        if not self.curve:
+        if not self.curve and not self.normal:
             layout.prop(self, 'low')
             layout.prop(self, 'high')
             layout.prop(self, 'power')
-        layout.prop(self, 'mirror')
+        if not self.curve:
+            layout.prop(self, 'normal')
+        if not self.normal:
+            layout.prop(self, 'mirror')
+        layout.prop(self, 'worldspace')
         # checking for a specific build is a bit tricky as it may contain other chars than just digits
         if int(search(r'\d+', str(bpy.app.build_revision)).group(0)) > 60054:
-            layout.prop(self, 'curve')
-            layout.label('Click Paint -> Slope to see effect')
+            if not self.normal:
+                layout.prop(self, 'curve')
+                if self.curve:
+                    layout.label('Click Paint -> Slope to see effect after changing brush curve')
 
 
 def menu_func_weight(self, context):
