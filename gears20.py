@@ -1,4 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
+﻿# ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Gears 2.0, a Blender addon
 #  (c) 2013 Michel J. Anders (varkenvarken)
@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 4),
+    "version": (0, 0, 5),
     "blender": (2, 68, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
@@ -33,7 +33,7 @@ bl_info = {
     "tracker_url": "",
     "category": "Add Mesh"}
 
-from math import pi as PI, sin, cos, atan2, degrees, radians
+from math import pi as PI, pow, sin, cos, tan, atan2, degrees, radians, sqrt
 import bpy
 import bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty, StringProperty
@@ -56,46 +56,103 @@ def rotate(v, r):
     v2.rotate(r)
     return v2
 
+def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0):
+  verts = []
+  
+  # 2 * pitchradius == modulus * numberofteeth
+  # 2 * pitchradius / numberofteeth == modulus
+  # numberofteeth = 2 * pi / arc
+  # pitchradius * arc / pi == modulus
+  modulus = arc * pitchradius / PI
+  baseradius = pitchradius * cos(pressureangle)
+  addendumradius = pitchradius + modulus
+  
+  addendumangle = sqrt(addendumradius**2 - baseradius**2)/baseradius
+  pitchangle = sqrt(pitchradius**2 - baseradius**2)/baseradius
+  #  print('pitchangle',pitchangle)
+  #  print('addendumangle',addendumangle)
+  x = baseradius * (cos(pitchangle) + pitchangle * sin(pitchangle))
+  y = baseradius * (sin(pitchangle) - pitchangle * cos(pitchangle))
+  pitchrotation = atan2(y,x)
+  #  print('extra',pitchrotation)
+  rotation = -(arc/4 + pitchrotation - backlash)
+  
+  step = addendumangle/nsteps
+  for angle in (i * step for i in range(nsteps+1)):
+    x = baseradius * (cos(angle) + angle * sin(angle))
+    y = baseradius * (sin(angle) - angle * cos(angle))
 
-def tooth(radius, arc, geartype):
+    x,y = x*cos(rotation)+y*sin(rotation), y*cos(rotation)+x*sin(rotation)
+    verts.append((x, y, 0))
+  return verts
+
+def involute_tooth(pitchradius, arc, fillet=0.01, steps=4, pressureangle=radians(20), backlash=0):
+
+  innerradius = pitchradius / 2
+  
+  modulus = arc * pitchradius / PI
+  dedendum = modulus / 2
+  baseradius = pitchradius * cos(pressureangle)
+  dedendumradius = baseradius - dedendum
+  
+  verts = [(innerradius * cos(a), innerradius * sin(a), 0) for a in (arc / 2, arc / 4, 0, -arc / 4, -arc /2 )]
+
+  ar = [(arc*(0.5 - s / 4), dedendumradius*(1 - s ** 3) + baseradius * s ** 3) for s in (n * 1.0/steps for n in range(steps))]
+  verts.extend(((r - fillet) * cos(-a), (r - fillet) * sin(-a), 0) for a,r in ar )
+
+  ivertsbot = involute(pitchradius, arc, pressureangle, steps, backlash)
+  ivertstop = [ (x, -y, z) for x,y,z in reversed(ivertsbot) ]
+  verts.extend(ivertsbot)
+  verts.extend(ivertstop)
+
+  verts.extend(((r - fillet) * cos(a), (r - fillet) * sin(a), 0) for a,r in reversed(ar) )
+
+  faces = [tuple(range(len(verts)))]  # single ngon
+
+  return verts, faces
+
+def tooth(radius, arc, geartype, toothtype, steps, fillet, pressureangle, backlash):
     bm = bmesh.new()
 
-    h = arc / 4
-    c0 = cos(h / 2)
-    s0 = sin(h / 2)
-    c1 = cos(h)
-    s1 = sin(h)
-    c2 = cos(h * 2)
-    s2 = sin(h * 2)
-    
-    r0 = radius * 0.5
-    r1 = radius - 0.2
-    r2 = radius
-    r3 = radius + 0.19
-    if geartype == 'Internal':
-        r0 = radius + 0.19 + 0.2
-        r1 = radius + 0.2
+    if toothtype == 'Involute':
+        verts, faces = involute_tooth(radius, arc, fillet, steps, pressureangle, backlash)
+    else:
+        h = arc / 4
+        c0 = cos(h / 2)
+        s0 = sin(h / 2)
+        c1 = cos(h)
+        s1 = sin(h)
+        c2 = cos(h * 2)
+        s2 = sin(h * 2)
+        
+        r0 = radius * 0.5
+        r1 = radius - 0.2
         r2 = radius
-        r3 = radius - 0.19
+        r3 = radius + 0.19
+        if geartype == 'Internal':
+            r0 = radius + 0.19 + 0.2
+            r1 = radius + 0.2
+            r2 = radius
+            r3 = radius - 0.19
+        
+        verts = [
+            (r0 * c2, r0 * s2, 0),  # 0
+            (r0 * c1, r0 * s1, 0),  # 1
+            (r0 * c1, -r0 * s1, 0),  # 2
+            (r0 * c2, -r0 * s2, 0),  # 3
+            (r1 * c2, r1 * s2, 0),  # 4
+            (r1 * c1, r1 * s1, 0),  # 5
+            (r1 * c1, -r1 * s1, 0),  # 6
+            (r1 * c2, -r1 * s2, 0),  # 7
+            (r2 * c1, r2 * s1, 0),  # 8
+            (r2 * c1, -r2 * s1, 0),  # 9
+            (r3 * c0, r3 * s0, 0),  # 10
+            (r3 * c0, -r3 * s0, 0)   # 11
+        ]
+        faces = [
+            (0, 1, 2, 3, 7, 6, 9, 11, 10, 8, 5, 4)
+        ]
     
-    verts = [
-        (r0 * c2, r0 * s2, 0),  # 0
-        (r0 * c1, r0 * s1, 0),  # 1
-        (r0 * c1, -r0 * s1, 0),  # 2
-        (r0 * c2, -r0 * s2, 0),  # 3
-        (r1 * c2, r1 * s2, 0),  # 4
-        (r1 * c1, r1 * s1, 0),  # 5
-        (r1 * c1, -r1 * s1, 0),  # 6
-        (r1 * c2, -r1 * s2, 0),  # 7
-        (r2 * c1, r2 * s1, 0),  # 8
-        (r2 * c1, -r2 * s1, 0),  # 9
-        (r3 * c0, r3 * s0, 0),  # 10
-        (r3 * c0, -r3 * s0, 0)   # 11
-    ]
-    faces = [
-        (0, 1, 2, 3, 7, 6, 9, 11, 10, 8, 5, 4)
-    ]
-
     for v in verts:
         bm.verts.new(v)
     for f in faces:
@@ -170,9 +227,9 @@ def setLocation(object, context, seen, rot_changed):
         object.location = Vector((0, 0, 0))
         rootradius, rootnteeth = object.radius, object.nteeth
     seen.add(object.name)
-    print('setLocation', offset, rotation)
-    object.rotation_mode = 'ZYX'
-    object.rotation_euler = (object.flip, 0, 0)
+    #  print('setLocation', offset, rotation)
+    object.rotation_mode = 'ZXY'
+    object.rotation_euler = (object.flip, object.tilt, 0)
     return rootradius, rootnteeth, offset, rotation
 
 
@@ -264,7 +321,7 @@ def updateObjects(context):
         rootradius, rootteeth = rootArc(g)
         radius = (rootradius * g.nteeth) / rootteeth
         arc = 2 * PI / g.nteeth
-        bm = tooth(radius, arc, g.geartype)
+        bm = tooth(radius, arc, g.geartype, g.toothtype, g.steps, g.fillet, g.pressureangle, g.backlash)
         bmesh.ops.spin(
             bm,
             geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
@@ -275,25 +332,22 @@ def updateObjects(context):
             cent=(0.0, 0.0, 0.0))
         bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=0.0001)
         nsteps = int(max(1, abs(g.helicalangle) / radians(10)))
-        bmesh.ops.spin(
-            bm,
-            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
-            angle=g.helicalangle,
-            steps=nsteps,
-            use_duplicate=False,
-            dvec=(0.0, 0.0, g.width / nsteps),
-            axis=(0.0, 0.0, 1.0),
-            cent=(0.0, 0.0, 0.0))
-        #ret = bmesh.ops.extrude_face_region(bm, geom=bm.faces[:])
-        #bmesh.ops.translate(bm, verts=[ele for ele in ret["geom"] if isinstance(ele, bmesh.types.BMVert)], vec=(0.0, 0.0, g.width))
-        #del ret
-
-        #bmesh.ops.rotate(
-        #    bm,
-        #    verts=bm.verts[:],
-        #    cent=(0, 0, 0),
-        #    matrix=Euler((g.flip, 0.0, 0.0), 'XYZ').to_matrix())
-        #    # keyword space is invalid for this operator, bug? space=g.matrix_basis
+        scale = 1 + tan(g.taper) * g.width
+        if nsteps > 1 :
+            scale = pow(scale, 1.0 / nsteps)
+        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+        for i in range(nsteps):  # we could spin all in one go but for the necessary tapering
+            ret = bmesh.ops.spin(
+                    bm,
+                    geom=geom,
+                    angle=g.helicalangle,
+                    steps=1,
+                    use_duplicate=False,
+                    dvec=(0.0, 0.0, g.width / nsteps),
+                    axis=(0.0, 0.0, 1.0),
+                    cent=(0.0, 0.0, 0.0))
+            geom = ret['geom_last']
+            bmesh.ops.scale(bm, vec=Vector((scale, scale, 1)), verts=[ele for ele in geom if isinstance(ele, bmesh.types.BMVert)])
 
         me = bpy.data.meshes.new("Gear")
         bm.to_mesh(me)
@@ -359,16 +413,70 @@ bpy.types.Object.rotation = FloatProperty(name="Rotation",
                                           update=updateMesh)
 
 bpy.types.Object.flip = FloatProperty(name="Flip",
-                                      description="Rotation along around line of gear train",
+                                      description="Rotation along the line of gear train",
                                       default=0,
                                       subtype='ANGLE',
                                       unit='ROTATION',
                                       update=updateMesh)
 
+bpy.types.Object.tilt = FloatProperty(name="Tilt",
+                                      description="Rotation perpendicular to the line of gear train",
+                                      default=0,
+                                      subtype='ANGLE',
+                                      unit='ROTATION',
+                                      update=updateMesh)
+
+bpy.types.Object.taper = FloatProperty(name="Taper",
+                                              description="Conical angle",
+                                              default=0,
+                                              subtype='ANGLE',
+                                              unit='ROTATION',
+                                              update=updateMesh)
+
+
 bpy.types.Object.driver = EnumProperty(items=availableGears, update=updateMesh)
 
 bpy.types.Object.geartype = EnumProperty(items=(('Regular', 'Regular', 'Regular (including helical and worm)'), ('Internal', 'Internal', 'Internal')), update=updateMesh)
 
+bpy.types.Object.toothtype = EnumProperty(items=(('Simple', 'Simple', 'Simple tooth'), ('Involute', 'Involute', 'Involute gear')), update=updateMesh)
+
+bpy.types.Object.steps = IntProperty(name="Steps",
+                                      description="Number of steps to define involute",
+                                      default=8,
+                                      min=4,
+                                      update=updateMesh)
+                                       
+bpy.types.Object.fillet = FloatProperty(name="Fillet",
+                                       description="Fillet (extra space below dedendum)",
+                                       default=0.03,
+                                       min=0,
+                                       soft_max=0.1,
+                                       subtype='DISTANCE',
+                                       unit='LENGTH',
+                                       step=1,
+                                       update=updateMesh)                                      
+
+bpy.types.Object.pressureangle = FloatProperty(name="Pressure angle",
+                                       description="Pressure angle",
+                                       default=radians(20),
+                                       min=0,
+                                       soft_min=radians(14.5),
+                                       soft_max=radians(22.5),
+                                       subtype='ANGLE',
+                                       unit='ROTATION',
+                                       update=updateMesh)                                      
+                                       
+bpy.types.Object.backlash = FloatProperty(name="Backlash",
+                                       description="Backlash (extra space between teeth)",
+                                       default=radians(0.1),
+                                       min=0,
+                                       soft_max=radians(1),
+                                       subtype='ANGLE',
+                                       unit='ROTATION',
+                                       step=1,
+                                       precision=4,
+                                       update=updateMesh)                                      
+                                       
 class Gears(bpy.types.Panel):
     bl_idname = "gears2"
     bl_label = "Gears"
@@ -386,9 +494,16 @@ class Gears(bpy.types.Panel):
             if 'reg' in o:
                 if o['reg'] == 'Gears':
                     layout.prop(o, 'geartype')
+                    layout.prop(o, 'toothtype')
+                    if o.toothtype == 'Involute':
+                        layout.prop(o, 'steps')
+                        layout.prop(o, 'fillet')
+                        layout.prop(o, 'pressureangle')
+                        layout.prop(o, 'backlash')
                     layout.prop(o, 'nteeth')
                     layout.prop(o, 'width')
                     layout.prop(o, 'helicalangle')
+                    layout.prop(o, 'taper')
                     col = layout.column()
                     col.prop(o, 'radius')
                     col.enabled = o.driver == ''
@@ -396,6 +511,7 @@ class Gears(bpy.types.Panel):
                     col = layout.column()
                     col.prop(o, 'rotation')
                     col.prop(o, 'flip')
+                    col.prop(o, 'tilt')
                     col.prop(o, 'twin')
                     col.enabled = o.driver != ''
 
@@ -420,10 +536,10 @@ class GearAdd(bpy.types.Operator):
         current = context.active_object
         bpy.ops.mesh.primitive_cube_add()
         context.active_object.name = 'Gear'
-        print('GearAdd')
+        #  print('GearAdd')
 
         if isGear(current):
-            print('current is gear', current.name)
+            #  print('current is gear', current.name)
             newgear = context.active_object
             newgear.driver = current.name
             newgear.reg = 'Gears'
@@ -440,7 +556,7 @@ class GearAdd(bpy.types.Operator):
                 'INVOKE_DEFAULT')
         else:
             bpy.ops.mesh.gear2_convert('INVOKE_DEFAULT')
-        print('I am here')
+        #  print('I am here')
         return {'FINISHED'}
 
 
