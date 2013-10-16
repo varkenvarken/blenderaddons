@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 5),
+    "version": (0, 0, 6),
     "blender": (2, 68, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
@@ -56,7 +56,7 @@ def rotate(v, r):
     v2.rotate(r)
     return v2
 
-def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0):
+def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0, shift=0):
   verts = []
   
   # 2 * pitchradius == modulus * numberofteeth
@@ -65,9 +65,11 @@ def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0):
   # pitchradius * arc / pi == modulus
   modulus = arc * pitchradius / PI
   baseradius = pitchradius * cos(pressureangle)
-  addendumradius = pitchradius + modulus
+  addendumradius = pitchradius + modulus + shift
+  dedendumradius = pitchradius - modulus + shift  # when the number of teeth is small the dedendumradius might be smaller than the baseradius!
   
   addendumangle = sqrt(addendumradius**2 - baseradius**2)/baseradius
+  dedendumangle = sqrt(max(dedendumradius**2 - baseradius**2, 0))/baseradius
   pitchangle = sqrt(pitchradius**2 - baseradius**2)/baseradius
   #  print('pitchangle',pitchangle)
   #  print('addendumangle',addendumangle)
@@ -77,8 +79,9 @@ def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0):
   #  print('extra',pitchrotation)
   rotation = -(arc/4 + pitchrotation - backlash)
   
-  step = addendumangle/nsteps
-  for angle in (i * step for i in range(nsteps+1)):
+  step = (addendumangle - dedendumangle) / nsteps
+  for dangle in (i * step for i in range(nsteps+1)):
+    angle = dedendumangle + dangle
     x = baseradius * (cos(angle) + angle * sin(angle))
     y = baseradius * (sin(angle) - angle * cos(angle))
 
@@ -86,36 +89,41 @@ def involute(pitchradius, arc, pressureangle, nsteps=4, backlash=0):
     verts.append((x, y, 0))
   return verts
 
-def involute_tooth(pitchradius, arc, fillet=0.01, steps=4, pressureangle=radians(20), backlash=0):
+def involute_tooth(pitchradius, arc, fillet=0.01, steps=4, pressureangle=radians(20), backlash=0, shift=0):
 
   innerradius = pitchradius / 2
   
   modulus = arc * pitchradius / PI
-  dedendum = modulus / 2
+  dedendum = modulus
   baseradius = pitchradius * cos(pressureangle)
-  dedendumradius = baseradius - dedendum
+  dedendumradius = pitchradius - dedendum + shift
   
   verts = [(innerradius * cos(a), innerradius * sin(a), 0) for a in (arc / 2, arc / 4, 0, -arc / 4, -arc /2 )]
 
-  ar = [(arc*(0.5 - s / 4), dedendumradius*(1 - s ** 3) + baseradius * s ** 3) for s in (n * 1.0/steps for n in range(steps))]
-  verts.extend(((r - fillet) * cos(-a), (r - fillet) * sin(-a), 0) for a,r in ar )
-
-  ivertsbot = involute(pitchradius, arc, pressureangle, steps, backlash)
+  ivertsbot = involute(pitchradius, arc, pressureangle, steps, backlash, shift)
   ivertstop = [ (x, -y, z) for x,y,z in reversed(ivertsbot) ]
+
+  #ar = [(arc*(0.5 - s / 4), dedendumradius) for s in (n * 1.0/steps for n in range(steps))]
+  arcfar = arc/2
+  arcnear = -atan2(ivertsbot[0][1], ivertsbot[0][0])
+  arcstep = (arcfar - arcnear)/steps
+  ar = [((arcfar - n * arcstep), dedendumradius) for n in range(steps)]
+  print(arcfar, arcnear, arcstep, len(ar), len(ivertsbot))
+  
+  verts.extend(((r - fillet) * cos(-a), (r - fillet) * sin(-a), 0) for a,r in ar )
   verts.extend(ivertsbot)
   verts.extend(ivertstop)
-
   verts.extend(((r - fillet) * cos(a), (r - fillet) * sin(a), 0) for a,r in reversed(ar) )
 
   faces = [tuple(range(len(verts)))]  # single ngon
 
   return verts, faces
 
-def tooth(radius, arc, geartype, toothtype, steps, fillet, pressureangle, backlash):
+def tooth(radius, arc, geartype, toothtype, steps, fillet, pressureangle, backlash, shift):
     bm = bmesh.new()
 
     if toothtype == 'Involute':
-        verts, faces = involute_tooth(radius, arc, fillet, steps, pressureangle, backlash)
+        verts, faces = involute_tooth(radius, arc, fillet, steps, pressureangle, backlash, shift)
     else:
         h = arc / 4
         c0 = cos(h / 2)
@@ -321,7 +329,7 @@ def updateObjects(context):
         rootradius, rootteeth = rootArc(g)
         radius = (rootradius * g.nteeth) / rootteeth
         arc = 2 * PI / g.nteeth
-        bm = tooth(radius, arc, g.geartype, g.toothtype, g.steps, g.fillet, g.pressureangle, g.backlash)
+        bm = tooth(radius, arc, g.geartype, g.toothtype, g.steps, g.fillet, g.pressureangle, g.backlash, g.shift)
         bmesh.ops.spin(
             bm,
             geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
@@ -461,7 +469,7 @@ bpy.types.Object.pressureangle = FloatProperty(name="Pressure angle",
                                        default=radians(20),
                                        min=0,
                                        soft_min=radians(14.5),
-                                       soft_max=radians(22.5),
+                                       soft_max=radians(25),
                                        subtype='ANGLE',
                                        unit='ROTATION',
                                        update=updateMesh)                                      
@@ -476,6 +484,15 @@ bpy.types.Object.backlash = FloatProperty(name="Backlash",
                                        step=1,
                                        precision=4,
                                        update=updateMesh)                                      
+
+bpy.types.Object.shift = FloatProperty(name="Shift",
+                                       description="Extra addendum/ less dedendum",
+                                       default=0,
+                                       subtype='DISTANCE',
+                                       unit='LENGTH',
+                                       step=1,
+                                       update=updateMesh)                                      
+
                                        
 class Gears(bpy.types.Panel):
     bl_idname = "gears2"
@@ -500,6 +517,7 @@ class Gears(bpy.types.Panel):
                         layout.prop(o, 'fillet')
                         layout.prop(o, 'pressureangle')
                         layout.prop(o, 'backlash')
+                        layout.prop(o, 'shift')
                     layout.prop(o, 'nteeth')
                     layout.prop(o, 'width')
                     layout.prop(o, 'helicalangle')
