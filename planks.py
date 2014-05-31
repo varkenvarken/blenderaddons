@@ -24,7 +24,7 @@
 bl_info = {
     "name": "Floor Generator",
     "author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
-    "version": (0, 0, 12),
+    "version": (0, 0, 13),
     "blender": (2, 67, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing floor boards (planks)",
@@ -56,7 +56,7 @@ def plank(start, end, left, right, longgap, shortgap, rot=None):
     ul = Vector((end - shortgap, right - longgap, 0))
     ur = Vector((end - shortgap, left, 0))
     if rot:
-        midpoint = Vector((start + end / 2, left + right / 2, 0))
+        midpoint = Vector(((start + end)/2.0, (left + right)/ 2.0, 0))
         ll = rotate((ll - midpoint), rot) + midpoint
         lr = rotate((lr - midpoint), rot) + midpoint
         ul = rotate((ul - midpoint), rot) + midpoint
