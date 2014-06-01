@@ -34,6 +34,7 @@ bl_info = {
 	"category": "Mesh"}
 
 import bpy
+from bpy.props import BoolProperty
 from mathutils import Vector
 from mathutils.geometry import intersect_ray_tri
 
@@ -43,11 +44,21 @@ def intersect_ray_quad_3d(quad, origin, destination):
 	if p is None:
 		p = intersect_ray_tri(quad[2],quad[3],quad[0],ray,origin)
 	return p
+
+def intersect_ray_scene(scene, origin, destination):
+	direction = destination - origin
+	result, object, matrix, location, normal = scene.ray_cast(origin + direction*0.0001, destination)
+	if result:
+		if object.type == 'Camera': # if have no idea if a camera can return true but just to play safe
+			result = False
+	return result		
 	
 class VisibleVertices(bpy.types.Operator):
 	bl_idname = "mesh.visiblevertices"
 	bl_label = "VisibleVertices"
 	bl_options = {'REGISTER', 'UNDO'}
+
+	fullScene = BoolProperty(name="Full Scene", default=True, description="Also check wether the view is blocked by objects in the scene.")
 
 	@classmethod
 	def poll(self, context):
@@ -78,8 +89,13 @@ class VisibleVertices(bpy.types.Operator):
 		mesh = ob.data
 		for v in mesh.vertices:
 			vertex_coords = mesh_mat * v.co
+			weight = 0.0
 			intersection = intersect_ray_quad_3d(view_frame, vertex_coords, cam_pos)
-			weight = 0.0 if intersection is None else 1.0
+			if intersection is not None:
+				weight = 1.0
+				if self.fullScene:
+					if intersect_ray_scene(scene, vertex_coords, cam_pos):
+						weight = 0.0
 			vertex_group.add([v.index], weight, 'REPLACE')
 
 		bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
