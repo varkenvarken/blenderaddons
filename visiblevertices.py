@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  VisibleVertices.py , a Blender addon
-#  (c) 2013 Michel J. Anders (varkenvarken)
+#  VisibleVertices.py , a Blender addon to weight paint vertices visible from the active camera.
+#  (c) 2014 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -25,7 +25,7 @@ bl_info = {
 	"name": "VisibleVertices",
 	"author": "Michel Anders (varkenvarken)",
 	"version": (0, 0, 1),
-	"blender": (2, 60, 0),
+	"blender": (2, 70, 0),
 	"location": "View3D > Object > Visible Vertices",
 	"description": "Replace active vertex group with weight = 1.0 if visible from active camera, 0.0 otherwise",
 	"warning": "",
