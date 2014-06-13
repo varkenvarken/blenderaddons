@@ -24,17 +24,17 @@
 bl_info = {
 	"name": "VisibleVertices",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 1),
+	"version": (0, 0, 2),
 	"blender": (2, 70, 0),
-	"location": "View3D > Object > Visible Vertices",
-	"description": "Replace active vertex group with weight = 1.0 if visible from active camera, 0.0 otherwise",
+	"location": "View3D > Weight Paint > Weights > Visible Vertices",
+	"description": "Replace active vertex group with weight > 0.0 if visible from active camera, 0.0 otherwise",
 	"warning": "",
 	"wiki_url": "",
 	"tracker_url": "",
 	"category": "Mesh"}
 
 import bpy
-from bpy.props import BoolProperty
+from bpy.props import BoolProperty, FloatProperty
 from mathutils import Vector
 from mathutils.geometry import intersect_ray_tri
 
@@ -58,7 +58,10 @@ class VisibleVertices(bpy.types.Operator):
 	bl_label = "VisibleVertices"
 	bl_options = {'REGISTER', 'UNDO'}
 
-	fullScene = BoolProperty(name="Full Scene", default=True, description="Also check wether the view is blocked by objects in the scene.")
+	fullScene = BoolProperty(name="Full Scene", default=True, description="Check wether the view is blocked by objects in the scene.")
+	distWeight = BoolProperty(name="Distance Weight", default=True, description="Give less weight to vertices further away from the camera.")
+	addModifier = BoolProperty(name="Add Modifier", default=True, description="Add a vertex weight modifier for additional control.")
+	margin = FloatProperty(name="Camera Margin", default=0.0, description="Add extra margin to the visual area from te camera (might be negative as well).")
 
 	@classmethod
 	def poll(self, context):
@@ -85,23 +88,67 @@ class VisibleVertices(bpy.types.Operator):
 		view_center = sum(view_frame, Vector((0,0,0)))/len(view_frame)
 		view_normal = (view_center - cam_pos).normalized()
 
+		if self.margin != 0.0:
+			view_frame = [((v - view_center)*(1+self.margin))+view_center for v in view_frame] 
+		
 		mesh_mat = ob.matrix_world
 		mesh = ob.data
+		distances = []
+		max_distance = 0
+		min_distance = None
 		for v in mesh.vertices:
 			vertex_coords = mesh_mat * v.co
-			weight = 0.0
-			intersection = intersect_ray_quad_3d(view_frame, vertex_coords, cam_pos)
+			d = None
+			intersection = intersect_ray_quad_3d(view_frame, vertex_coords, cam_pos) # check intersection with the camera frame
+			print(intersection, end=" | ")
 			if intersection is not None:
-				weight = 1.0
+				d = (intersection - vertex_coords).length
 				if self.fullScene:
-					if intersect_ray_scene(scene, vertex_coords, cam_pos):
-						weight = 0.0
-			vertex_group.add([v.index], weight, 'REPLACE')
+					if intersect_ray_scene(scene, vertex_coords, cam_pos):	# check intersection with all other objects in scene. We revert the direction, ie. look from the camera to avoid self intersection
+						d = None
+			if d is not None:
+				if d > max_distance :
+					max_distance = d
+				if min_distance is None or d < min_distance:
+					min_distance = d
+			distances.append((v.index, d))
+
+		drange = max_distance - min_distance
+		print(min_distance, max_distance, drange)
+		if self.distWeight and drange > 1e-7:
+			print("weighted")
+			for vindex, d in distances:
+				print(d, end=' ')
+				if d is None:
+					vertex_group.add([vindex], 0.0, 'REPLACE')
+				else:
+					vertex_group.add([vindex], 1.0 - ((d - min_distance) / drange), 'REPLACE')
+		else:
+			print("not weighted")
+			for vindex, d in distances:
+				print(d, end='')
+				if d is None:
+					vertex_group.add([vindex], 0.0, 'REPLACE')
+				else:
+					vertex_group.add([vindex], 1.0 if d > 0.0 else 0.0, 'REPLACE')
 
 		bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
 		bpy.ops.object.mode_set(mode='EDIT')
 		bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
 		context.scene.update()
+		
+		if self.addModifier:
+			bpy.ops.object.modifier_add(type='VERTEX_WEIGHT_EDIT')
+			ob.modifiers[-1].vertex_group = ob.vertex_groups.active.name
+			ob.modifiers[-1].falloff_type = 'CURVE'
+			# make modifier panel visible to atract some attention because this is a lesser known modifier
+			ws = context.window_manager.windows
+			for a in ws[0].screen.areas:
+				if(a.type == 'PROPERTIES'):
+					for s in a.spaces:
+						if s.type == 'PROPERTIES':
+							s.context = 'MODIFIER'
+
 		return {'FINISHED'}
 
 
