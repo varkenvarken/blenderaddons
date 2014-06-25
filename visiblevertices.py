@@ -24,7 +24,7 @@
 bl_info = {
 	"name": "VisibleVertices",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 2),
+	"version": (0, 0, 3),
 	"blender": (2, 70, 0),
 	"location": "View3D > Weight Paint > Weights > Visible Vertices",
 	"description": "Replace active vertex group with weight > 0.0 if visible from active camera, 0.0 otherwise",
@@ -100,12 +100,16 @@ class VisibleVertices(bpy.types.Operator):
 			vertex_coords = mesh_mat * v.co
 			d = None
 			intersection = intersect_ray_quad_3d(view_frame, vertex_coords, cam_pos) # check intersection with the camera frame
-			print(intersection, end=" | ")
+			#print(intersection, end=" | ")
 			if intersection is not None:
-				d = (intersection - vertex_coords).length
-				if self.fullScene:
-					if intersect_ray_scene(scene, vertex_coords, cam_pos):	# check intersection with all other objects in scene. We revert the direction, ie. look from the camera to avoid self intersection
-						d = None
+				d = (intersection - vertex_coords)
+				if d.dot(view_normal) < 0: # only take into account vertices in front of the camera, not behind it.
+					d = d.length
+					if self.fullScene:
+						if intersect_ray_scene(scene, vertex_coords, cam_pos):	# check intersection with all other objects in scene. We revert the direction, ie. look from the camera to avoid self intersection
+							d = None
+				else:
+					d = None
 			if d is not None:
 				if d > max_distance :
 					max_distance = d
@@ -113,20 +117,20 @@ class VisibleVertices(bpy.types.Operator):
 					min_distance = d
 			distances.append((v.index, d))
 
-		drange = max_distance - min_distance
-		print(min_distance, max_distance, drange)
+		drange = max_distance - min_distance if min_distance is not None else max_distance # prevent exception if the was not a single visible vertex
+		#print(min_distance, max_distance, drange)
 		if self.distWeight and drange > 1e-7:
-			print("weighted")
+			#print("weighted")
 			for vindex, d in distances:
-				print(d, end=' ')
+				#print(d, end=' ')
 				if d is None:
 					vertex_group.add([vindex], 0.0, 'REPLACE')
 				else:
 					vertex_group.add([vindex], 1.0 - ((d - min_distance) / drange), 'REPLACE')
 		else:
-			print("not weighted")
+			#print("not weighted")
 			for vindex, d in distances:
-				print(d, end='')
+				#print(d, end='')
 				if d is None:
 					vertex_group.add([vindex], 0.0, 'REPLACE')
 				else:
