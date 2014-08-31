@@ -24,7 +24,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain (Alain) and Floric (floric)",
-	"version": (0, 0, 14),
+	"version": (0, 0, 15),
 	"blender": (2, 71, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -51,11 +51,10 @@ def rotate(v, r):
 
 available_meshes = [(' None ','None',"")]
 
-# TODO exclude meshes that are floorboards to avoid intersection with self
 def availableMeshes(self, context):
 	available_meshes.clear()
 	for ob in bpy.data.objects:
-		if ob.type == 'MESH':
+		if ob.type == 'MESH' and ob.name != context.active_object.name:
 			name = ob.name[:]
 			available_meshes.append((name, name, ""))
 	if(len(available_meshes)==0):
@@ -276,9 +275,73 @@ def updateMesh(self, context):
 	
 	# intersect with a floorplan
 	if self.usefloorplan and self.floorplan != ' None ':
-		bpy.ops.object.modifier_add(type='BOOLEAN') # default is intersect
-		o.modifiers[-1].object = bpy.data.objects[self.floorplan]
-		bpy.ops.object.modifier_apply(apply_as='DATA', modifier="Boolean")
+		# make the floorplan the only active an selected object
+		bpy.ops.object.select_all(action='DESELECT')
+		context.scene.objects.active = bpy.data.objects[self.floorplan]
+		bpy.data.objects[self.floorplan].select = True
+
+		# duplicate the selected geometry into a separate object
+		me = context.scene.objects.active.data
+		selected_faces = [p.index for p in me.polygons if p.select]
+		bpy.ops.object.editmode_toggle()
+		bpy.ops.mesh.duplicate()
+		bpy.ops.mesh.separate()
+		bpy.ops.object.editmode_toggle()
+		me = context.scene.objects.active.data
+		for i in selected_faces:
+			me.polygons[i].select = True
+
+		# now there will be two selected objects
+		# the one with the new name will be the copy
+		for ob in context.selected_objects:
+			if ob.name != self.floorplan:
+				fpob = ob
+		print('floorplan copy',fpob.name)
+		
+		# make that copy active and selected
+		for ob in context.selected_objects:
+			ob.select = False
+		fpob.select = True
+		context.scene.objects.active = fpob
+		
+		if True:
+			# add thickness
+			# let normals of select faces point in same direction
+			bpy.ops.object.editmode_toggle()
+			bpy.ops.mesh.select_all(action='SELECT')
+			bpy.ops.mesh.normals_make_consistent(inside=False)
+			bpy.ops.object.editmode_toggle()
+			# add solidify modifier
+			# NOTE: for some reason bpy.ops.object.modifier_add doesn't work here
+			# even though fpob at this point is verifyable the active and selected object ...
+			mod = fpob.modifiers.new(name='Solidify', type='SOLIDIFY')
+			mod.offset = 1.0 # in the direction of the normals
+			mod.thickness = 2000 # very thick
+			bpy.ops.object.modifier_apply(apply_as='DATA', modifier="Solidify")
+			bpy.ops.object.editmode_toggle()
+			bpy.ops.mesh.select_all(action='SELECT')
+			bpy.ops.mesh.normals_make_consistent(inside=False)
+			bpy.ops.object.editmode_toggle()
+			fpob.location -= Vector((0,0,1000)) # actually this should be in the negative direction of the normals not just plain downward...
+			
+			# make the floorboards active and selected
+			for ob in context.selected_objects:
+				ob.select = False
+			context.scene.objects.active = o
+			o.select = True
+			
+			# add-and-apply a boolean modifier to get the intersection with the floorplan copy
+			bpy.ops.object.modifier_add(type='BOOLEAN') # default is intersect
+			o.modifiers[-1].object = fpob
+			bpy.ops.object.modifier_apply(apply_as='DATA', modifier="Boolean")
+			# delete the copy
+			bpy.ops.object.select_all(action='DESELECT')
+			context.scene.objects.active = fpob
+			fpob.select = True
+			bpy.ops.object.delete()
+			# make the floorboards active and selected
+			context.scene.objects.active = o
+			o.select = True
 		
 	if self.modify:
 		mods = o.modifiers
@@ -570,6 +633,7 @@ class FloorBoardsAdd(bpy.types.Operator):
 
 	def execute(self, context):
 		bpy.ops.mesh.primitive_cube_add()
+		context.active_object.name = "FloorBoard"
 		bpy.ops.mesh.floor_boards_convert('INVOKE_DEFAULT')
 		return {'FINISHED'}
 
