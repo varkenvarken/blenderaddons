@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "DryStone",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20140925),
+	"version": (0, 0, 20141102),
 	"blender": (2, 71, 0),
 	"location": "View3D > Add > Mesh > DryStone",
 	"description": "Add a mesh of irregular stacked blocks.",
@@ -118,6 +118,8 @@ class DryStone(bpy.types.Operator):
 	randomedge	= FloatProperty(name="Random Edge"   		, description="Randomize movable edges"                  , min=0.0, max=0.5     , default=0.3)
 	randomvert	= FloatProperty(name="Random Vert"   		, description="Randomize vertices"                       , min=0.0, max=0.5     , default=0.4)
 	zrandom		= FloatProperty(name="Random Displacement"	, description="Randomize block depth"                    , min=0.0, max=0.5     , default=0.01)
+	randomuv 	= BoolProperty (name="Randomize UVs"		, description="Randomize the uv-offset of individual stones", default=True)
+										
 				
 	@classmethod
 	def poll(self, context):
@@ -157,7 +159,6 @@ class DryStone(bpy.types.Operator):
 			vert.co.x += x
 			vert.co.y += y
 		
-		# TODO add random uv and vcolor
 		extruded_faces = bmesh.ops.extrude_discrete_faces(bm, faces=bm.faces)['faces']
 		bm.verts.index_update()
 		for face in extruded_faces:
@@ -178,6 +179,19 @@ class DryStone(bpy.types.Operator):
 		bpy.ops.object.editmode_toggle()
 		obj.scale.x = self.xsub/10.0
 		obj.scale.y = self.ysub/10.0
+
+		# add random uv and vcolor
+		me.uv_textures.new()
+		uv_layer = me.uv_layers.active.data
+		vertex_colors = me.vertex_colors.new().data
+		for poly in me.polygons:
+			offset = Vector((random(), random(), 0)) if obj.randomuv else Vector((0, 0, 0))
+			color = [random(), random(), random()]
+			for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+				coords = me.vertices[me.loops[loop_index].vertex_index].co
+				uv_layer[loop_index].uv = (coords + offset).xy
+				vertex_colors[loop_index].color = color
+		
 		
 		bpy.ops.object.modifier_add(type='SOLIDIFY')
 		bpy.context.object.modifiers["Solidify"].offset = 1
