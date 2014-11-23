@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Basket Arch",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20141116),
+	"version": (0, 0, 20141123),
 	"blender": (2, 72, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a basket arch mesh",
@@ -66,7 +66,9 @@ def basket_arch(W,D,resolution=1):
 	
 	co =   circle(c1x, c1y, w, pi             , pi / 2.0 + beta, resolution * 3*pi/360)
 	co +=  circle(cmx, cmy, r, pi / 2.0 + beta, pi / 2.0 - beta, resolution *   pi/360)
-	co +=  circle(c2x, c2y, w, pi / 2.0 - beta, 0.0            , resolution * 3*pi/360)
+	# reversing the generation of the points in this segment will ensure these segments are symmetrical
+	# reversing the resulting list is necessary to maintain the order of the generated polygons
+	co +=  reversed(circle(c2x, c2y, w, 0.0	  , pi / 2.0 - beta, resolution * 3*pi/360))
 	
 	n = len(co)
 	return co + [(x,y+D,z) for x,y,z in co], [(i,i+1,n+i+1,n+i) for i in range(n-1)]
