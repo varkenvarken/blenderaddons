@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Basket Arch",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20141123),
+	"version": (0, 0, 20141130),
 	"blender": (2, 72, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a basket arch mesh",
@@ -31,7 +31,7 @@ bl_info = {
 	"tracker_url": "",
 	"category": "Add Mesh"}
 									
-from math import atan2, sin, cos, pi, degrees, sqrt
+from math import atan2, asin, sin, cos, pi, degrees, sqrt
 import bpy, bmesh
 from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty, IntProperty 
 from bpy_extras import object_utils
@@ -48,27 +48,84 @@ def circle(x,y,r,s,e,w):
 			co.append((x+r*cos(s),0,y+r*sin(s)))
 			s -= w
 	return co
+
+def calc_radii(W,H):
+	r = 2*H/3.0
+	h = H/3.0
+	w = W/2.0
+	alpha = atan2(h, w)
+	b = sqrt(w*w + h*h)
+	s = b/sin(alpha)
+	c = s - h
+	R = c + H
 	
-def basket_arch(W,D,resolution=1):
-	w = W / 4.0
-	h = sqrt(3.0) * w
-	r = 3.0 * w
+	return r,R,c
+
+def R(w,h):
+	"""
+	calculate the y poistion of the center circle of a basket arch given half the width and the height.
+	"""
+	a = h/3.0
+	beta = atan2(a,w)
+	c = sqrt(a**2 + w**2)
+	d = c/2.0
+	e = d/sin(beta)
+	return e-a
 	
-	c1x = -w
-	c1y = 0
-	cmx = 0
-	cmy = -h
-	c2x = w
-	c2y = 0
+def c(xA,yA,rA, xB,yB,rB):
+	"""
+	return the interection point(s) of two circles.
+	"""
+	d2 = (xB-xA)**2 + (yB-yA)**2 
+	K = (1/4.0) * sqrt(((rA+rB)**2-d2) * (d2-(rA-rB)**2))
 	
-	alpha = atan2(h, 2.0 * w)
-	beta = atan2(w , h)
+	xb = (1/2.0)*(xB+xA) + (1/2.0)*(xB-xA)*(rA**2-rB**2)/d2
+	dx = 2*(yB-yA)*K/d2 
+	yb = (1/2.0)*(yB+yA) + (1/2.0)*(yB-yA)*(rA**2-rB**2)/d2
+	dy = -2*(xB-xA)*K/d2
+
+	return ((xb+dx,yb+dy), (xb-dx,yb-dy))
+
 	
-	co =   circle(c1x, c1y, w, pi             , pi / 2.0 + beta, resolution * 3*pi/360)
+def basket_arch(W,D,H=0,resolution=1):
+	if (H > 0) and (W/H >= 2.0) and (W/H <= 4.0):
+		w=2*H/3.0
+		s=W/2.0-w
+		rc = R(s,H)
+		r = rc + H
+		c1x = -s
+		c1y = 0
+		cmx = 0
+		cmy = -rc
+		c2x = s
+		c2y = 0
+		CX,CY = c(c1x,c2x,w, cmx,cmy,r)[0]
+		dx = -CX
+		dy = CY + rc
+		beta = atan2(dx,dy)
+		dx = -CX-s
+		dy = CY
+		alpha = atan2(dx,dy)
+		
+	else:
+		w = W / 4.0
+		h = sqrt(3.0) * w
+		r = 3.0 * w
+		c1x = -w
+		c1y = 0
+		cmx = 0
+		cmy = -h
+		c2x = w
+		c2y = 0
+		#alpha = atan2(h, 2.0 * w)
+		beta = atan2(w , h)
+		alpha = beta
+		
+	co =   circle(c1x, c1y, w, pi             , pi / 2.0 + alpha, resolution * 3*pi/360)
 	co +=  circle(cmx, cmy, r, pi / 2.0 + beta, pi / 2.0 - beta, resolution *   pi/360)
 	# reversing the generation of the points in this segment will ensure these segments are symmetrical
 	# reversing the resulting list is necessary to maintain the order of the generated polygons
-	co +=  reversed(circle(c2x, c2y, w, 0.0	  , pi / 2.0 - beta, resolution * 3*pi/360))
+	co +=  reversed(circle(c2x, c2y, w, 0.0	  , pi / 2.0 - alpha, resolution * 3*pi/360))
 	
 	n = len(co)
 	return co + [(x,y+D,z) for x,y,z in co], [(i,i+1,n+i+1,n+i) for i in range(n-1)]
@@ -95,6 +152,11 @@ class BasketArch(bpy.types.Operator):
 			default=4,
 			subtype='DISTANCE',
 			unit='LENGTH')
+	height = FloatProperty(
+			name="Height",description="Height of the basket arch (0 if classical)",
+			default=0,
+			subtype='DISTANCE',
+			unit='LENGTH')
 	depth = FloatProperty(
 			name="Depth",description="Depth of the basket arch",
 			default=1,
@@ -107,7 +169,7 @@ class BasketArch(bpy.types.Operator):
 									
 	def execute(self, context):
 
-		verts_loc, faces = basket_arch(self.width, self.depth, self.resolution)
+		verts_loc, faces = basket_arch(self.width, self.depth, self.height, self.resolution)
 
 		mesh = bpy.data.meshes.new("BasketArch")
 
