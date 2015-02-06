@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Basket Arch, a Blender addon
-#  (c) 2014 Michel J. Anders (varkenvarken)
+#  (c) 2014,2015 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Basket Arch",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20141130),
-	"blender": (2, 72, 0),
+	"version": (0, 0, 20150206),
+	"blender": (2, 73, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a basket arch mesh",
 	"warning": "",
@@ -178,6 +178,10 @@ class BasketArch(bpy.types.Operator):
 		for v_co in verts_loc:
 			bm.verts.new(v_co)
 
+		# see http://blenderartists.org/forum/archive/index.php/t-354412.html for next bit
+		if hasattr(bm.verts, "ensure_lookup_table"):
+			bm.verts.ensure_lookup_table()
+		
 		for f_idx in faces:
 			bm.faces.new([bm.verts[i] for i in f_idx])
 
