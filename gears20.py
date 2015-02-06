@@ -1,7 +1,7 @@
 ﻿# ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Gears 2.0, a Blender addon
-#  (c) 2013 Michel J. Anders (varkenvarken)
+#  (c) 2013,2014,2015 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -24,8 +24,8 @@
 bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 6),
-    "blender": (2, 68, 0),
+    "version": (0, 0, 7),
+    "blender": (2, 73, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
     "warning": "",
@@ -163,6 +163,9 @@ def tooth(radius, arc, geartype, toothtype, steps, fillet, pressureangle, backla
     
     for v in verts:
         bm.verts.new(v)
+    # see http://blenderartists.org/forum/archive/index.php/t-354412.html for next bit
+    if hasattr(bm.verts, "ensure_lookup_table"):
+        bm.verts.ensure_lookup_table()
     for f in faces:
         bm.faces.new([bm.verts[i] for i in f])
     return bm
