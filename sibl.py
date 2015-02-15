@@ -22,7 +22,7 @@
 bl_info = {
     "name": "Add Environment Nodes",
     "author": "Michel J. Anders (varkenvarken)",
-    "version": (1, 0, 0),
+    "version": (1, 0, 20150215),
     "blender": (2, 67, 0),
     "location": "Node  editor > Add > Add Sibl Environment, Add General Environment",
     "description": "Adds environment lighting based on .ibl file or separate background and .hdr files",
@@ -183,7 +183,7 @@ class SiblEnvironment(bpy.types.Operator, ImportHelper):
                 pass
             main(self,context,bg,ev)
         else:
-            return {'CANCELED'}
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 class GeneralEnvironment(bpy.types.Operator, ImportHelper):
@@ -251,7 +251,7 @@ class GeneralEnvironment(bpy.types.Operator, ImportHelper):
                 pass
             main(self,context,bg,ev)
         else:
-            return {'CANCELED'}
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 def menu_func_sibl(self, context):
