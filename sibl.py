@@ -22,8 +22,8 @@
 bl_info = {
     "name": "Add Environment Nodes",
     "author": "Michel J. Anders (varkenvarken)",
-    "version": (1, 0, 20150215),
-    "blender": (2, 67, 0),
+    "version": (1, 0, 20150313),
+    "blender": (2, 73, 0),
     "location": "Node  editor > Add > Add Sibl Environment, Add General Environment",
     "description": "Adds environment lighting based on .ibl file or separate background and .hdr files",
     "warning": "",
@@ -150,7 +150,7 @@ class SiblEnvironment(bpy.types.Operator, ImportHelper):
     def poll(cls, context):
         space = context.space_data
         # TODO add additional restriction cycles only
-        return space.type == 'NODE_EDITOR' and space.shader_type == 'WORLD' and space.tree_type == 'ShaderNodeTree' and space.texture_type == 'OBJECT'
+        return space.type == 'NODE_EDITOR' and space.shader_type == 'WORLD' and space.tree_type == 'ShaderNodeTree' and context.scene.world.use_nodes
 
     def execute(self, context):
         if self.filepath != "":
@@ -225,7 +225,7 @@ class GeneralEnvironment(bpy.types.Operator, ImportHelper):
     def poll(cls, context):
         space = context.space_data
         # TODO add additional restriction cycles only
-        return space.type == 'NODE_EDITOR' and space.shader_type == 'WORLD' and space.tree_type == 'ShaderNodeTree' and space.texture_type == 'OBJECT'
+        return space.type == 'NODE_EDITOR' and space.shader_type == 'WORLD' and space.tree_type == 'ShaderNodeTree' and context.scene.world.use_nodes
 
     def execute(self, context):
         print(self.directory)
@@ -272,6 +272,7 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(SiblEnvironment)
+    bpy.utils.unregister_class(GeneralEnvironment)
 
 if __name__ == "__main__":
     register()
