@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 20150320),
-	"blender": (2, 73, 0),
+	"version": (0, 0, 20150404),
+	"blender": (2, 74, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
 	"warning": "",
@@ -232,15 +232,21 @@ def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, r
 	fuvs = [v for p in uvs for v in p]
 	return verts, faces, fuvs
 	
-def square(rows, cols, planklength, n, longgap, shortgap, nseed, randrotx, randroty, randrotz):
+def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrotx, randroty, randrotz):
 	verts = []
+	verts2 = []
 	faces = []
+	faces2 = []
 	uvs = []
+	uvs2 = []
 	seed(nseed)
 	
 	ll=0
-	plankwidth = planklength/n
-	longside = (planklength-shortgap)
+	ll2=0
+	net_planklength = planklength - 2.0 * border
+	
+	plankwidth = net_planklength/n
+	longside = (net_planklength-shortgap)
 	shortside = (plankwidth-longgap)
 	stepv = Vector((0,planklength ,0))
 	steph = Vector((planklength,0 ,0))
@@ -249,44 +255,73 @@ def square(rows, cols, planklength, n, longgap, shortgap, nseed, randrotx, randr
 	
 	pv = [Vector((0,0,0)),Vector((longside,0,0)),Vector((longside,shortside,0)),Vector((0,shortside,0))]
 	rot = Euler((0,0,-PI/2),"XYZ")
-	pvm = [rotate(v, rot) + Vector((0,planklength,0)) for v in pv]
+	pvm = [rotate(v, rot) + Vector((0,planklength - border,0)) for v in pv]
 	
 	midpointpv = sum(pv,Vector())/4.0
 	midpointpvm = sum(pvm,Vector())/4.0
 	
-	# CLEANUP: duplicate code and suboptimal loop nesting
+	offseth = Vector((border, border, 0))
+	offsetv = Vector((border, 0, 0))
+	
+	bw = border - shortgap
+	b1 = [(0,longgap/2.0,0),(0,planklength - longgap/2.0,0),(bw,planklength - longgap/2.0 - border,0),(bw,longgap/2.0 + border,0)]
+	b1 = [Vector(v) for v in b1]
+	d = Vector((planklength/2.0, planklength/2.0, 0))
+	rot = Euler((0,0,-  PI/2),"XYZ")
+	b2 = [rotate(v-d,rot)+d for v in b1]
+	rot = Euler((0,0,-  PI  ),"XYZ")
+	b3 = [rotate(v-d,rot)+d for v in b1]
+	rot = Euler((0,0,-3*PI/2),"XYZ")
+	b4 = [rotate(v-d,rot)+d for v in b1]
+	
+	# CLEANUP: duplicate code, suboptimal loop nesting and a lot of repeated calculations
 	# note that the uv map we create here is always aligned in the same direction even though planks alternate. This matches the saw direction in real life
 	for col in range(cols):
 		for row in range(rows):
+			# add the regular planks
 			for p in range(n):
 				rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
 				if (col ^ row) %2 == 1:
-					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nstepv * p for v in pv]
+					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nstepv * p + offseth for v in pv]
 					uverts = [v + row * stepv + col * steph + nstepv * p for v in pv]
 				else:
-					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nsteph * p for v in pvm]
+					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nsteph * p + offsetv for v in pvm]
 					uverts = [v + row * stepv + col * steph + nstepv * p for v in pv]
-				verts.extend(pverts)
+				verts.extend(deepcopy(pverts))
 				uvs.append(deepcopy(uverts))
 				faces.append((ll, ll + 1, ll + 2, ll + 3))
 				ll = len(verts)
-	
+			# add the border planks
+			if bw > 0.001:
+				for vl in b1,b2,b3,b4:
+					rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
+					midpointvl = sum(vl,Vector())/4.0
+					verts2.extend([rotate(v - midpointvl, rot) + midpointvl + row * stepv + col * steph for v in vl])
+					uvs2.append(deepcopy([v + row * stepv + col * steph for v in b1])) # again, always the unrotated uvs to match the saw direction
+					faces2.append((ll2, ll2 + 3, ll2 + 2, ll2 + 1))
+					ll2 = len(verts2)
+						
 	for i in range(len(uvs)):
 		pp1 = randrange(len(uvs))
 		pp2 = randrange(len(uvs))
 		swap(uvs,pp1,pp2)
+	for i in range(len(uvs2)):
+		pp1 = randrange(len(uvs2))
+		pp2 = randrange(len(uvs2))
+		swap(uvs2,pp1,pp2)
 	
 	fuvs = [v for p in uvs for v in p]
+	fuvs2 = [v for p in uvs2 for v in p]
 	
-	return verts, faces, fuvs
+	return verts + verts2, faces + [(f[0]+ll,f[1]+ll,f[2]+ll,f[3]+ll) for f in faces2], fuvs + fuvs2
 	
 def shortside(vert):
-	"""return true if 2 out of 3 connected vertices are x aligned"""
-	x = vert.co.x
+	"""return true if length of 2 out of 3 connected vertices is equal to the min length of the connected edges"""
 	n = 0
-	for e in vert.link_edges:
-		xo = e.other_vert(vert).co.x
-		if abs(xo - x) < 1e-4:
+	el = [e.calc_length() for e in vert.link_edges]
+	mel = min(el)
+	for e in el:
+		if abs(e - mel) < 1e-4 :
 			n += 1
 	return n == 2
 
@@ -319,7 +354,7 @@ def updateMesh(self, context):
 	elif o.pattern == 'Square':
 		rows = int(o.width / o.planklength)+1
 		cols = int(o.length / o.planklength)+1
-		verts, faces, uvs = square(rows, cols, o.planklength, o.nsquare, o.longgap, o.shortgap, o.randomseed, o.randrotx, o.randroty, o.randrotz)
+		verts, faces, uvs = square(rows, cols, o.planklength, o.nsquare, o.border, o.longgap, o.shortgap, o.randomseed, o.randrotx, o.randroty, o.randrotz)
 	
 	# create mesh &link object to scene
 	emesh = o.data
@@ -675,6 +710,16 @@ bpy.types.Object.nsquare = IntProperty(name="Planks per Square",
 										min=1,
 										update=updateMesh)
 
+bpy.types.Object.border = FloatProperty(name="Border",
+										description="Width of border",
+										default=0,
+										soft_max=0.1,
+										min=0,
+										subtype='DISTANCE',
+										unit='LENGTH',
+										update=updateMesh)
+
+
 bpy.types.Object.randomuv = EnumProperty(name="UV randomization",
 										description="Randomization mode for the uv-offset of individual planks",
 										items = [('None','None','Plain mapping from top view'),
@@ -800,6 +845,7 @@ class FloorBoards(bpy.types.Panel):
 						box.prop(o, 'planklength')
 						if o.pattern == 'Square':
 							box.prop(o, 'nsquare')
+							box.prop(o, 'border')
 						else:
 							box.prop(o, 'plankwidth')
 					if o.pattern == 'Regular':
