@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 20150404),
+	"version": (0, 0, 20150828),
 	"blender": (2, 74, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -380,6 +380,7 @@ def updateMesh(self, context):
 	bpy.ops.object.shade_smooth()
 
 	# add uv-coords and per face random vertex colors
+	rot = Euler((0,0,o.uvrotation))
 	mesh.uv_textures.new()
 	uv_layer = mesh.uv_layers.active.data
 	vertex_colors = mesh.vertex_colors.new().data
@@ -394,6 +395,10 @@ def updateMesh(self, context):
 				coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co + offset
 			else:
 				coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
+			coords = Vector(coords) # copy
+			coords.x *= o.uvscalex
+			coords.y *= o.uvscaley
+			coords.rotate(rot)
 			uv_layer[loop_index].uv = coords.xy
 			vertex_colors[loop_index].color = color
 
@@ -797,6 +802,29 @@ bpy.types.Object.twist = FloatProperty(name="Twist along plank",
 									precision=4,
 									update=updateMesh)
 
+bpy.types.Object.uvrotation = FloatProperty(name="UV Rotation",
+										description="Rotation of the generated UV-map",
+										default=0,
+										step=(1.0 / 180) * PI,
+										precision=2,
+										subtype='ANGLE',
+										unit='ROTATION',
+										update=updateMesh)
+
+bpy.types.Object.uvscalex = FloatProperty(name="UV X Scale ",
+											description="Scale UV coordinates in the X direction",
+											default=1.0,
+											step=0.01,
+											precision=4,
+											update=updateMesh)
+
+bpy.types.Object.uvscaley = FloatProperty(name="UV Y Scale ",
+											description="Scale UV coordinates in the Y direction",
+											default=1.0,
+											step=0.01,
+											precision=4,
+											update=updateMesh)
+
 bpy.types.Object.floorplan = EnumProperty(name="Floorplan",
 									description="Mesh to use as a floorplan",
 									items = availableMeshes,
@@ -889,9 +917,17 @@ class FloorBoards(bpy.types.Panel):
 						box.prop(o, 'floorplan')
 					row = box.row()
 					row.prop(o, 'randomuv')
+					row = box.row()
+					row.prop(o, 'uvrotation')
+					row = box.row()
+					row.prop(o, 'uvscalex')
+					row.prop(o, 'uvscaley')
+					row = box.row()
 					row.prop(o, 'modify')
 					if o.modify:
 						row.prop(o, 'bevel')
+					row = box.row()
+					row.prop(o,'preservemats')
 				else:
 					layout.operator('mesh.floor_boards_convert')
 			else:
