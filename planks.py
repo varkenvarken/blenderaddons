@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 20150828),
+	"version": (0, 0, 201508281437),
 	"blender": (2, 74, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -156,7 +156,7 @@ def planks(n, m,
 			pverts = plank(s, e, ws, we, longgap, shortgap, rot)
 			verts.extend(pverts)
 			uvs[-1].append(deepcopy(pverts))
-			faces.append((ll, ll + 1, ll + 2, ll + 3))
+			faces.append((ll, ll + 3, ll + 2, ll + 1))
 			s = e
 			e += length + randuni(0, lengthvar)
 		ll = len(verts)
@@ -164,7 +164,7 @@ def planks(n, m,
 		pverts = plank(s, m, ws, we, longgap, shortgap, rot)
 		verts.extend(pverts)
 		uvs[-1].append(deepcopy(pverts))
-		faces.append((ll, ll + 1, ll + 2, ll + 3))
+		faces.append((ll, ll + 3, ll + 2, ll + 1))
 		s = 0
 		#e = e - m
 		if c <= (length):
