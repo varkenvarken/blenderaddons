@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201508281437),
+	"version": (0, 0, 201508301001),
 	"blender": (2, 74, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -45,7 +45,7 @@ from mathutils import Vector, Euler
 # docs are now fixed (https://projects.blender.org/tracker/index.php?func=detail&aid=36518&group_id=9&atid=498)
 # but unfortunately no rotated() function was added
 def rotate(v, r):
-	v2 = v.copy()
+	v2 = deepcopy(v)
 	v2.rotate(r)
 	return v2
 
@@ -385,14 +385,25 @@ def updateMesh(self, context):
 	uv_layer = mesh.uv_layers.active.data
 	vertex_colors = mesh.vertex_colors.new().data
 	offset = Vector()
+	# note that the uvs that are returned are shuffled
 	for poly in mesh.polygons:
 		color = [rand(), rand(), rand()]
-		if o.randomuv == 'Random': offset = Vector((rand(), rand(), 0))
+		if o.randomuv == 'Random':
+			offset = Vector((rand(), rand(), 0))
+		elif o.randomuv == 'Packed':
+			x = []
+			y = []
+			for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+				x.append(uvs[mesh.loops[loop_index].vertex_index].x)
+				y.append(uvs[mesh.loops[loop_index].vertex_index].y)
+			offset = Vector((-min(x), -min(y), 0))
 		for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
 			if o.randomuv == 'Shuffle':
 				coords = uvs[mesh.loops[loop_index].vertex_index]
 			elif o.randomuv == 'Random':
 				coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co + offset
+			elif o.randomuv == 'Packed':
+				coords = uvs[mesh.loops[loop_index].vertex_index] + offset
 			else:
 				coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co
 			coords = Vector(coords) # copy
@@ -729,7 +740,8 @@ bpy.types.Object.randomuv = EnumProperty(name="UV randomization",
 										description="Randomization mode for the uv-offset of individual planks",
 										items = [('None','None','Plain mapping from top view'),
 									         ('Random','Random','Add random offset to plain map of individual planks'),
-											 ('Shuffle','Shuffle','Exchange uvmaps of simlilar planks')],
+											 ('Shuffle','Shuffle','Exchange uvmaps of simlilar planks'),
+											 ('Packed','Packed','Overlap all uvs of individual planks while maintaining their proportions')],
 										update=updateMesh)
 
 bpy.types.Object.modify = BoolProperty(name="Add modifiers",
