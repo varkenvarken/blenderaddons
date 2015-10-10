@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201508301001),
+	"version": (0, 0, 201510101638),
 	"blender": (2, 74, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -125,7 +125,8 @@ def planks(n, m,
 		longgap, shortgap,
 		offset, randomoffset,
 		nseed,
-		randrotx, randroty, randrotz):
+		randrotx, randroty, randrotz,
+		originx, originy):
 
 	#n=Number of planks, m=Floor Length, length = Planklength
 
@@ -153,7 +154,7 @@ def planks(n, m,
 		while (m - e) > (4 * shortgap):
 			ll = len(verts)
 			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
-			pverts = plank(s, e, ws, we, longgap, shortgap, rot)
+			pverts = plank(s - originx, e - originx, ws - originy, we - originy, longgap, shortgap, rot)
 			verts.extend(pverts)
 			uvs[-1].append(deepcopy(pverts))
 			faces.append((ll, ll + 3, ll + 2, ll + 1))
@@ -161,7 +162,7 @@ def planks(n, m,
 			e += length + randuni(0, lengthvar)
 		ll = len(verts)
 		rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
-		pverts = plank(s, m, ws, we, longgap, shortgap, rot)
+		pverts = plank(s - originx, m - originx, ws - originy, we - originy, longgap, shortgap, rot)
 		verts.extend(pverts)
 		uvs[-1].append(deepcopy(pverts))
 		faces.append((ll, ll + 3, ll + 2, ll + 1))
@@ -183,7 +184,7 @@ def planks(n, m,
 	fuvs = [uv for col in uvs for plank in col for uv in plank]
 	return verts, faces, fuvs
 
-def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, randrotx, randroty, randrotz):
+def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, randrotx, randroty, randrotz, originx, originy):
 	verts = []
 	faces = []
 	uvs = []
@@ -207,18 +208,24 @@ def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, r
 	
 	midpointpv = sum(pv,Vector())/4.0
 	midpointpvm = sum(pvm,Vector())/4.0
-	
+
+	o = Vector((-originx, -originy, 0))
+	midpointpvo = midpointpv - o
+	midpointpvmo = midpointpvm - o
+
 	for col in range(cols):
 		for row in range(rows):
 			# CLEANUP: this could be shorter: for P in pv,pvm 
 			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
-			pverts = [rotate(v - midpointpv, rot) + midpointpv  + row * vstep + col * hstepl + dy for v in pv]
+			pvo = [ v + o for v in pv]
+			pverts = [rotate(v - midpointpvo, rot) + midpointpvo  + row * vstep + col * hstepl + dy for v in pvo]
 			verts.extend(deepcopy(pverts))
 			uvs.append([v + Vector((col*2*longside,row*shortside,0)) for v in pu])
 			faces.append((ll, ll + 1, ll + 2, ll + 3))
 			ll = len(verts)
 			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
-			pverts = [rotate(v - midpointpvm, rot) + midpointpvm  + row * vstep + col * hstepl + dy for v in pvm]
+			pvmo = [ v + o for v in pvm]
+			pverts = [rotate(v - midpointpvmo, rot) + midpointpvmo  + row * vstep + col * hstepl + dy for v in pvmo]
 			verts.extend(deepcopy(pverts))
 			uvs.append([v + Vector(((1+col*2)*longside,row*shortside,0)) for v in pu])
 			faces.append((ll, ll + 1, ll + 2, ll + 3))
@@ -232,7 +239,7 @@ def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, r
 	fuvs = [v for p in uvs for v in p]
 	return verts, faces, fuvs
 	
-def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrotx, randroty, randrotz):
+def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrotx, randroty, randrotz, originx, originy):
 	verts = []
 	verts2 = []
 	faces = []
@@ -273,7 +280,9 @@ def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrot
 	b3 = [rotate(v-d,rot)+d for v in b1]
 	rot = Euler((0,0,-3*PI/2),"XYZ")
 	b4 = [rotate(v-d,rot)+d for v in b1]
-	
+
+	o = Vector((-originx, -originy, 0))
+
 	# CLEANUP: duplicate code, suboptimal loop nesting and a lot of repeated calculations
 	# note that the uv map we create here is always aligned in the same direction even though planks alternate. This matches the saw direction in real life
 	for col in range(cols):
@@ -282,10 +291,10 @@ def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrot
 			for p in range(n):
 				rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
 				if (col ^ row) %2 == 1:
-					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nstepv * p + offseth for v in pv]
+					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nstepv * p + offseth + o for v in pv]
 					uverts = [v + row * stepv + col * steph + nstepv * p for v in pv]
 				else:
-					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nsteph * p + offsetv for v in pvm]
+					pverts = [rotate(v - midpointpv, rot) + midpointpv + row * stepv + col * steph + nsteph * p + offsetv + o for v in pvm]
 					uverts = [v + row * stepv + col * steph + nstepv * p for v in pv]
 				verts.extend(deepcopy(pverts))
 				uvs.append(deepcopy(uverts))
@@ -296,7 +305,7 @@ def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrot
 				for vl in b1,b2,b3,b4:
 					rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
 					midpointvl = sum(vl,Vector())/4.0
-					verts2.extend([rotate(v - midpointvl, rot) + midpointvl + row * stepv + col * steph for v in vl])
+					verts2.extend([rotate(v - midpointvl, rot) + midpointvl + row * stepv + col * steph + o for v in vl])
 					uvs2.append(deepcopy([v + row * stepv + col * steph for v in b1])) # again, always the unrotated uvs to match the saw direction
 					faces2.append((ll2, ll2 + 3, ll2 + 2, ll2 + 1))
 					ll2 = len(verts2)
@@ -332,29 +341,33 @@ def updateMesh(self, context):
 	material_list = getMaterialList(o)
 		
 	if o.pattern == 'Regular':
-		nplanks = o.width / o.plankwidth
-		verts, faces, uvs = planks(nplanks, o.length,
+		nplanks = (o.width + o.originy) / o.plankwidth
+		verts, faces, uvs = planks(nplanks, o.length + o.originx,
 												o.planklength, o.planklengthvar,
 												o.plankwidth, o.plankwidthvar,
 												o.longgap, o.shortgap,
 												o.offset, o.randomoffset,
 												o.randomseed,
-												o.randrotx, o.randroty, o.randrotz)
+												o.randrotx, o.randroty, o.randrotz,
+												o.originx, o.originy)
 	elif o.pattern == 'Herringbone':
 		# note that there is a lot of extra length and width here to make sure that  we create a pattern w.o. gaps at the edges
 		v = o.plankwidth * sqrt(2.0)
 		w = o.planklength * sqrt(2.0)
-		nplanks = int((o.width+o.planklength) / v)+1
-		nplanksc = int(o.length / w)+1
+		nplanks = int((o.width+o.planklength + o.originy*2) / v)+1
+		nplanksc = int((o.length + o.originx*2) / w)+1
 		verts, faces, uvs = herringbone(nplanks, nplanksc,
 												o.planklength, o.plankwidth,
 												o.longgap, o.shortgap,
 												o.randomseed,
-												o.randrotx, o.randroty, o.randrotz)
+												o.randrotx, o.randroty, o.randrotz,
+												o.originx, o.originy)
 	elif o.pattern == 'Square':
-		rows = int(o.width / o.planklength)+1
-		cols = int(o.length / o.planklength)+1
-		verts, faces, uvs = square(rows, cols, o.planklength, o.nsquare, o.border, o.longgap, o.shortgap, o.randomseed, o.randrotx, o.randroty, o.randrotz)
+		rows = int((o.width + o.originy)/ o.planklength)+1
+		cols = int((o.length + o.originx)/ o.planklength)+1
+		verts, faces, uvs = square(rows, cols, o.planklength, o.nsquare, o.border, o.longgap, o.shortgap, o.randomseed,
+									o.randrotx, o.randroty, o.randrotz,
+									o.originx, o.originy)
 	
 	# create mesh &link object to scene
 	emesh = o.data
@@ -370,7 +383,7 @@ def updateMesh(self, context):
 			i.data = mesh
 
 	name = emesh.name
-	emesh.user_clear() # this way the old mesh is marked as used by noone and not save on exit
+	emesh.user_clear() # this way the old mesh is marked as used by noone and not saved on exit
 	bpy.data.meshes.remove(emesh)
 	mesh.name = name
 	if bpy.context.mode != 'EDIT_MESH':
@@ -735,6 +748,24 @@ bpy.types.Object.border = FloatProperty(name="Border",
 										unit='LENGTH',
 										update=updateMesh)
 
+bpy.types.Object.originx = FloatProperty(name="OriginX",
+										description="X offset of the whole pattern",
+										default=0,
+										soft_max=1,
+										min=0,
+										subtype='DISTANCE',
+										unit='LENGTH',
+										update=updateMesh)
+
+bpy.types.Object.originy = FloatProperty(name="OriginY",
+										description="Y offset of the whole pattern",
+										default=0,
+										soft_max=1,
+										min=0,
+										subtype='DISTANCE',
+										unit='LENGTH',
+										update=updateMesh)
+
 
 bpy.types.Object.randomuv = EnumProperty(name="UV randomization",
 										description="Randomization mode for the uv-offset of individual planks",
@@ -879,7 +910,10 @@ class FloorBoards(bpy.types.Panel):
 					columns = box.row()
 					columns.prop(o, 'length')
 					columns.prop(o, 'width')
-					
+					columns = box.row()
+					columns.prop(o, 'originx')
+					columns.prop(o, 'originy')
+
 					box.label('Planks')
 					if o.pattern in { 'Herringbone', 'Square'}:
 						box.prop(o, 'planklength')
