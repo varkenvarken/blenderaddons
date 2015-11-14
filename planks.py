@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201510101638),
-	"blender": (2, 74, 0),
+	"version": (0, 0, 201511141025),
+	"blender": (2, 76, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
 	"warning": "",
@@ -32,7 +32,7 @@ bl_info = {
 	"category": "Add Mesh"}
 
 from random import random as rand, seed, uniform as randuni, randrange
-from math import pi as PI, sqrt
+from math import pi as PI, sqrt, radians
 from copy import deepcopy
 from itertools import zip_longest
 import bpy
@@ -40,6 +40,10 @@ import bmesh
 from bpy.props import FloatProperty, IntProperty, BoolProperty, EnumProperty, StringProperty
 from mathutils import Vector, Euler
 
+D180 = radians(180)
+D90 = radians(90)
+D45 = radians(45)
+W2 = sqrt(2)
 
 # Vector.rotate() does NOT return anything, contrary to what the docs say
 # docs are now fixed (https://projects.blender.org/tracker/index.php?func=detail&aid=36518&group_id=9&atid=498)
@@ -48,6 +52,14 @@ def rotate(v, r):
 	v2 = deepcopy(v)
 	v2.rotate(r)
 	return v2
+
+def rotatep(v, r, p):
+	v2 = v - p
+	v2.rotate(r)
+	return v2 + p
+
+def vcenter(verts):
+	return sum(verts,Vector())/len(verts)
 
 available_meshes = [(' None ','None',"")]
 
@@ -118,6 +130,20 @@ def plank(start, end, left, right, longgap, shortgap, rot=None):
 		ur = rotate((ur - midpoint), rot) + midpoint
 	verts = (ll, lr, ul, ur)
 	return verts
+
+def planklw(length, width, rot=None):
+	ll = Vector((0, 0, 0))
+	lr = Vector((length, 0, 0))
+	ul = Vector((length, width, 0))
+	ur = Vector((0, width, 0))
+	if rot:
+		ll = rotate(ll, rot)
+		lr = rotate(lr, rot)
+		ul = rotate(ul, rot)
+		ur = rotate(ur, rot)
+	verts = (ll, lr, ul, ur)
+	return verts
+
 
 def planks(n, m,
 		length, lengthvar,
@@ -334,7 +360,126 @@ def shortside(vert):
 			n += 1
 	return n == 2
 
+def versaille(rows, cols, planklength, plankwidth,longgap=0, shortgap=0, randrotx=0, randroty=0, randrotz=0, originx=0, originy=0, switch=False):
 
+	o = Vector((-originx, -originy, 0)) * planklength
+
+	# (8*w+w/W2)*W2 + w = 8*w*W2+w = (8*W2+1)*w = 1 
+	w = 1.0 / (8*W2+2)
+	#w1 = 1 - w
+	q = w/W2
+	#k = w*4*W2-w
+	#s = (k - w)/2
+	#d = ((s+2*w)/W2)/2
+	#S = s/W2
+	sg = shortgap
+	s2 = sg/W2
+	lg = longgap
+
+	dd=-q if switch else 0
+
+	planks1 = (
+		# rectangles
+		(0,[(0+sg,0,0), (w*5-sg,0,0), (w*5-sg,w,0), (0+sg,w,0)]),
+		(0,[(6*w+sg,0,0), (w*11-sg,0,0), (w*11-sg,w,0), (6*w+sg,w,0)]),
+		(90,[(5*w,-2*w+sg,0), (w*6,-2*w+sg,0), (w*6,3*w-sg,0), (5*w,3*w-sg,0)]),
+		(0,[(3*w+sg,3*w,0), (w*8-sg,3*w,0), (w*8-sg,w*4,0), (3*w+sg,w*4,0)]),
+		(0,[(3*w+sg,-3*w,0), (w*8-sg,-3*w,0), (w*8-sg,w*-2,0), (3*w+sg,w*-2,0)]),
+		(90,[(5*w,4*w+sg,0),(6*w,4*w+sg,0),(6*w,6*w-sg,0),(5*w,6*w-sg,0)]),
+		(90,[(5*w,-3*w-sg,0),(5*w,-5*w+sg,0),(6*w,-5*w+sg,0),(6*w,-3*w-sg,0)]),
+		# squares
+		(0,[(0+sg,w+sg,0), (w*2-sg,w+sg,0), (w*2-sg,w*3-sg,0), (0+sg,w*3-sg,0)]),
+		(0,[(3*w+sg,w+sg,0), (w*5-sg,w+sg,0), (w*5-sg,w*3-sg,0), (3*w+sg,w*3-sg,0)]),
+		(0,[(6*w+sg,w+sg,0), (w*8-sg,w+sg,0), (w*8-sg,w*3-sg,0), (6*w+sg,w*3-sg,0)]),
+		(0,[(9*w+sg,w+sg,0), (w*11-sg,w+sg,0), (w*11-sg,w*3-sg,0), (9*w+sg,w*3-sg,0)]),
+		(0,[(0+sg,-2*w+sg,0), (w*2-sg,-2*w+sg,0), (w*2-sg,0-sg,0), (0+sg,0-sg,0)]),
+		(0,[(3*w+sg,-2*w+sg,0), (w*5-sg,-2*w+sg,0), (w*5-sg,0-sg,0), (3*w+sg,0-sg,0)]),
+		(0,[(6*w+sg,-2*w+sg,0), (w*8-sg,-2*w+sg,0), (w*8-sg,0-sg,0), (6*w+sg,0-sg,0)]),
+		(0,[(9*w+sg,-2*w+sg,0), (w*11-sg,-2*w+sg,0), (w*11-sg,0-sg,0), (9*w+sg,0-sg,0)]),
+		(0,[(3*w+sg,4*w+sg,0),(5*w-sg,4*w+sg,0),(5*w-sg,6*w-sg,0),(3*w+sg,6*w-sg,0)]),
+		(0,[(6*w+sg,4*w+sg,0),(8*w-sg,4*w+sg,0),(8*w-sg,6*w-sg,0),(6*w+sg,6*w-sg,0)]),
+		(0,[(3*w+sg,-5*w+sg,0),(5*w-sg,-5*w+sg,0),(5*w-sg,-3*w-sg,0),(3*w+sg,-3*w-sg,0)]),
+		(0,[(6*w+sg,-5*w+sg,0),(8*w-sg,-5*w+sg,0),(8*w-sg,-3*w-sg,0),(6*w+sg,-3*w-sg,0)]),
+		
+		# pointed
+		(0,[(0+sg,3*w,0),(2*w-sg,3*w,0),(2*w-sg,4*w,0),(w+sg,4*w,0)]),
+		#left
+		(0,[(w+sg,4*w,0),(2*w-sg,4*w,0),(2*w-sg,5*w-sg*2,0)]),
+		
+		(0,[(9*w+sg,3*w,0),(11*w-sg,3*w,0),(10*w-sg,4*w,0),(9*w+sg,4*w,0)]),
+		#top
+		(0,[(9*w+sg,4*w,0),(10*w-sg,4*w,0),(9*w+sg,5*w-sg*2,0)]),
+		
+		(0,[(0+sg,-2*w,0),(w+sg,-3*w,0),(2*w-sg,-3*w,0),(2*w-sg,-2*w,0)]),
+		#bottom
+		(0,[(1*w+sg,-3*w,0),(2*w-sg,-4*w+sg+sg,0),(2*w-sg,-3*w,0)]),
+		
+		(0,[(9*w+sg,-3*w,0),(10*w-sg,-3*w,0),(11*w-sg,-2*w,0),(9*w+sg,-2*w,0)]),
+		#right
+		(0,[(9*w+sg,-3*w,0),(9*w+sg,-4*w+sg*2,0),(10*w-sg,-3*w,0)]),
+		
+		# long pointed
+		(90,[(2*w,0-sg,0),(2*w,-4*w+sg,0),(3*w,-5*w+sg,0),(3*w,0-sg,0)]),
+		(90,[(8*w,0-sg,0),(8*w,-5*w+sg,0),(9*w,-4*w+sg,0),(9*w,0-sg,0)]),
+		(90,[(2*w,w+sg,0),(3*w,w+sg,0),(3*w,6*w-sg,0),(2*w,5*w-sg,0)]),
+		(90,[(8*w,w+sg,0),(9*w,w+sg,0),(9*w,5*w-sg,0),(8*w,6*w-sg,0)]),
+		# corner planks
+		(90,[(0,-2*w+sg,0),(0,3*w-sg,0),(-1*w,2*w-sg,0),(-1*w,-1*w+sg,0)]),
+		(90,[(11*w,-2*w+sg,0),(12*w,-1*w+sg,0),(12*w,2*w-sg,0),(11*w,3*w-sg,0)]),
+		(0,[(3*w+sg,-5*w,0),(4*w+sg,-6*w,0),(7*w-sg,-6*w,0),(8*w-sg,-5*w,0)]),
+		(0,[(3*w+sg,6*w,0),(8*w-sg,6*w,0),(7*w-sg,7*w,0),(4*w+sg,7*w,0)]),
+		# corner triangles
+		(90,[(-w-s2,-w+s2*2,0),(-w-s2,2*w-s2*2,0),(-2.5*w+s2,0.5*w,0)]),
+		(90,[(12*w+s2,2*w-s2*2,0),(12*w+s2,-w+s2*2,0),(13.5*w-s2,0.5*w,0)]),
+		(0,[(4*w+s2*2,7*w+s2,0),(7*w-s2*2,7*w+s2,0),(5.5*w,8.5*w-s2,0)]),
+		(0,[(4*w+s2*2,-6*w-s2,0),(5.5*w,-7.5*w+s2,0),(7*w-s2*2,-6*w-s2,0)]),
+		
+		# border planks
+		# bottom
+		(45,[(-2.5*w-q+q+dd+lg,0.5*w+q-q-dd-lg,0),(-2.5*w-2*q+q+dd+lg+lg,0.5*w-q-dd+lg-lg,0),(5.5*w-q+lg-lg,-7.5*w-q+lg+lg,0),(5.5*w-lg,-7.5*w+lg,0)]),
+		# right
+		(135,[(5.5*w-q+lg,-7.5*w-q+lg,0),(5.5*w+lg-lg,-7.5*w-2*q+lg+lg,0),(13.5*w+2*q+dd-lg-lg,0.5*w+dd-lg+lg,0),(13.5*w+q+dd-lg,0.5*w+q+dd-lg,0)]),
+		#top
+		(45,[(13.5*w-dd-lg,0.5*w+dd+lg,0),(13.5*w+q-dd-lg-lg,0.5*w+q+dd-lg+lg,0),(5.5*w+q-lg+lg,8.5*w+q-lg-lg,0),(5.5*w+lg,8.5*w-lg,0)]),
+		#left
+		(135,[(-2.5*w-q-dd+lg,0.5*w-q-dd+lg,0),(5.5*w+q-lg,8.5*w+q-lg,0),(5.5*w-lg+lg,8.5*w+2*q-lg-lg,0),(-2.5*w-q-q-dd+lg+lg,0.5*w+q-q-dd+lg-lg,0)])
+	)
+	
+	verts = []
+	faces = []
+	uvs = []
+	left = 0
+	center = Vector((5.5*w,0.5*w,0))*planklength
+	delta = Vector((w, -10*q, 0)) * planklength
+	for col in range(cols):
+		start = 0
+		for row in range(rows):
+			origin = Vector((start, left, 0))
+			for uvrot,p in planks1:
+				ll = len(verts)
+				rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
+				# randomly rotate the plank a little bit around its own center
+				pverts = [rotate(Vector(v)*planklength, rot) for v in p]
+				pverts = [origin + delta + o + rotatep(v, Euler((0,0,radians(45)),'XYZ'), center) for v in pverts]
+				
+				verts.extend(pverts)
+				midpoint = vcenter(pverts)
+				if uvrot > 0:
+					print(uvrot)
+					print([v - midpoint for v in pverts])
+					print([rotatep(v, Euler((0,0,radians(uvrot)),'XYZ'), midpoint) - midpoint for v in pverts])
+					print()
+				uvs.append([rotatep(v, Euler((0,0,radians(uvrot)),'XYZ'), midpoint) for v in pverts])
+				faces.append((ll, ll + 3, ll + 2, ll + 1) if len(pverts)==4 else (ll, ll + 2, ll + 1))
+
+
+			start += planklength
+		left += planklength
+	
+	fuvs = [v for p in uvs for v in p]
+	
+	return verts, faces, fuvs
+	
 def updateMesh(self, context):
 	o = context.object
 
@@ -368,7 +513,16 @@ def updateMesh(self, context):
 		verts, faces, uvs = square(rows, cols, o.planklength, o.nsquare, o.border, o.longgap, o.shortgap, o.randomseed,
 									o.randrotx, o.randroty, o.randrotz,
 									o.originx, o.originy)
-	
+	elif o.pattern == 'Versaille':
+		rows = int((o.width + o.originy)/ o.planklength)+2
+		cols = int((o.length + o.originx)/ o.planklength)+2
+		verts, faces, uvs = versaille(rows, cols, 
+										o.planklength, o.plankwidth,
+										o.longgap, o.shortgap,
+										o.randrotx, o.randroty, o.randrotz,
+										o.originx, o.originy,
+										o.borderswitch)
+
 	# create mesh &link object to scene
 	emesh = o.data
 
@@ -882,8 +1036,15 @@ bpy.types.Object.pattern = EnumProperty(name="Pattern",
 									description="Pattern of the planks",
 									items = [('Regular','Regular','Parallel planks'),
 									         ('Herringbone','Herringbone','Herringbone pattern'),
-											 ('Square','Square','Alternating square pattern')],
+											 ('Square','Square','Alternating square pattern'),
+											 ('Versaille','Versaille','Diagonal weave like pattern')],
 									update=updateMesh)
+
+bpy.types.Object.borderswitch = BoolProperty(name="Switch border",
+									description="Order border plank in a spiral fashion",
+									default=False,
+									update=updateMesh)
+
 
     
 class FloorBoards(bpy.types.Panel):
@@ -915,12 +1076,12 @@ class FloorBoards(bpy.types.Panel):
 					columns.prop(o, 'originy')
 
 					box.label('Planks')
-					if o.pattern in { 'Herringbone', 'Square'}:
+					if o.pattern in { 'Herringbone', 'Square', 'Versaille'}:
 						box.prop(o, 'planklength')
 						if o.pattern == 'Square':
 							box.prop(o, 'nsquare')
 							box.prop(o, 'border')
-						else:
+						elif o.pattern != 'Versaille':
 							box.prop(o, 'plankwidth')
 					if o.pattern == 'Regular':
 						columns = box.row()
@@ -943,7 +1104,9 @@ class FloorBoards(bpy.types.Panel):
 					columns = box.row()
 					columns.prop(o, 'longgap')
 					columns.prop(o, 'shortgap')
-					
+					if o.pattern == 'Versaille':
+						box.prop(o, 'borderswitch')
+
 					box.label('Randomness')
 					columns = box.row()
 					col1 = columns.column()
