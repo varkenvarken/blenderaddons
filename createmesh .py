@@ -19,82 +19,34 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-verts = [
-	(-1.0, -1.0, -1.0),
-	(-1.0, -1.0, 1.0),
-	(-1.0, 1.0, -1.0),
-	(-1.0, 1.0, 1.0),
-	(1.0, -1.0, -1.0),
-	(1.0, -1.0, 1.0),
-	(1.0, 1.0, -1.0),
-	(1.0, 1.0, 1.0),
-]
+suffix = ""
 
-faces = [
-	(1, 3, 2, 0),
-	(3, 7, 6, 2),
-	(7, 5, 4, 6),
-	(5, 1, 0, 4),
-	(0, 2, 6, 4),
-	(5, 7, 3, 1),
-]
+verts = [(-1,-1,-1),(-1.0365,-1,1.0122),(-1,1,-1),(-1,1,1),(1,-1,-1),(1,-1,1),(1,1,-1),(1,1,1),]
 
-edges = [
-	(0, 1),
-	(1, 3),
-	(3, 2),
-	(2, 0),
-	(3, 7),
-	(7, 6),
-	(6, 2),
-	(7, 5),
-	(5, 4),
-	(4, 6),
-	(5, 1),
-	(0, 4),
-]
+faces = [(1, 3, 2, 0),(3, 7, 6, 2),(7, 5, 4, 6),(5, 1, 0, 4),(0, 2, 6, 4),(5, 7, 3, 1),]
 
-seams = {
-	0: True,
-	1: True,
-	2: True,
-	3: True,
-	4: False,
-	5: True,
-	6: False,
-	7: True,
-	8: True,
-	9: True,
-	10: False,
-	11: False,
-}
+edges = [(0, 1),(1, 3),(3, 2),(2, 0),(3, 7),(7, 6),(6, 2),(7, 5),(5, 4),(4, 6),(5, 1),(0, 4),]
 
-crease = {
-	0: 0.0,
-	1: 1.0,
-	2: 0.0,
-	3: 0.0,
-	4: 1.0,
-	5: 0.0,
-	6: 0.0,
-	7: 1.0,
-	8: 0.0,
-	9: 0.0,
-	10: 1.0,
-	11: 0.0,
-}
+seams = {0: False,1: False,2: False,3: False,4: False,5: False,6: False,7: False,8: False,9: False,10: False,11: False,}
+
+crease = {0: 0.0,1: 0.0,2: 0.0,3: 0.0,4: 0.0,5: 0.0,6: 0.0,7: 0.0,8: 0.0,9: 0.0,10: 0.0,11: 0.0,}
+
+selected = {0: True,1: True,2: True,3: True,4: True,5: True,6: True,7: True,8: True,9: True,10: True,11: True,}
+
+uv = {0: {1: (0,0),3: (1,0),2: (1,1),0: (0,1),},1: {3: (0,0),7: (1,0),6: (1,1),2: (0,1),},2: {7: (0,0),5: (1,0),4: (1,1),6: (0,1),},3: {5: (0,0),1: (1,0),0: (1,1),4: (0,1),},4: {0: (0,0),2: (1,0),6: (1,1),4: (0,1),},5: {5: (0,0),7: (1,0),3: (1,1),1: (0,1),},}
+
 
 
 
 bl_info = {
 	"name": "CreateMesh",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201601081122),
+	"version": (0, 0, 201601111212),
 	"blender": (2, 76, 0),
 	"location": "View3D > Object > Add Mesh > DumpedMesh",
 	"description": "Adds a mesh object to the scene that was created with the DumpMesh addon",
 	"warning": "",
-	"wiki_url": "",
+	"wiki_url": "https://github.com/varkenvarken/blenderaddons/blob/master/createmesh%20.py",
 	"tracker_url": "",
 	"category": "Add Mesh"}
 
@@ -102,22 +54,56 @@ import bpy
 import bmesh
 
 def geometry():
+
+	# we check if certain lists and dicts are defined
+	have_seams 		= 'seams' + suffix in globals()
+	have_crease 	= 'crease' + suffix in globals()
+	have_selected 	= 'selected' + suffix in globals()
+	have_uv 		= 'uv' + suffix in globals()
+
+	# we deliberately shadow the global entries so we don't have to deal
+	# with the suffix if it's there
+	verts 		= globals()['verts' + suffix]
+	edges 		= globals()['edges' + suffix]
+	faces 		= globals()['faces' + suffix]
+	if have_seams:		seams 		= globals()['seams' + suffix]
+	if have_crease:		crease 		= globals()['crease' + suffix]
+	if have_selected:	selected 	= globals()['selected' + suffix]
+	if have_uv:			uv 			= globals()['uv' + suffix]
+
 	bm = bmesh.new()
 
 	for v in verts:
 		bm.verts.new(v)
-	bm.verts.ensure_lookup_table()
-	
+	bm.verts.ensure_lookup_table()  # ensures bm.verts can be indexed
+	bm.verts.index_update()         # ensures all bm.verts have an index (= different thing!)
+
 	for n,e in enumerate(edges):
 		edge = bm.edges.new(bm.verts[v] for v in e)
-		edge.seam = seams[n]
+		if have_seams:
+			edge.seam = seams[n]
+		if have_selected:
+			edge.select = selected[n]
+
 	bm.edges.ensure_lookup_table()
-	cl = bm.edges.layers.crease.new()
-	for n,e in enumerate(bm.edges): # no need for bm.edges.update_index, we don't use e.index
-		e[cl] = crease[n]
-	
+	bm.edges.index_update()
+
+	if have_crease:
+		cl = bm.edges.layers.crease.new()
+		for n,e in enumerate(bm.edges):
+			e[cl] = crease[n]
+
 	for f in faces:
 		bm.faces.new(bm.verts[v] for v in f)
+
+	bm.faces.ensure_lookup_table()
+	bm.faces.index_update()
+
+	if have_uv:
+		uv_layer = bm.loops.layers.uv.new()
+		for face in bm.faces:
+			for loop in face.loops:
+				loop[uv_layer].uv = uv[face.index][loop.vert.index]
 
 	return bm
 
