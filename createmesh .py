@@ -19,29 +19,10 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-suffix = ""
-
-verts = [(-1,-1,-1),(-1.0365,-1,1.0122),(-1,1,-1),(-1,1,1),(1,-1,-1),(1,-1,1),(1,1,-1),(1,1,1),]
-
-faces = [(1, 3, 2, 0),(3, 7, 6, 2),(7, 5, 4, 6),(5, 1, 0, 4),(0, 2, 6, 4),(5, 7, 3, 1),]
-
-edges = [(0, 1),(1, 3),(3, 2),(2, 0),(3, 7),(7, 6),(6, 2),(7, 5),(5, 4),(4, 6),(5, 1),(0, 4),]
-
-seams = {0: False,1: False,2: False,3: False,4: False,5: False,6: False,7: False,8: False,9: False,10: False,11: False,}
-
-crease = {0: 0.0,1: 0.0,2: 0.0,3: 0.0,4: 0.0,5: 0.0,6: 0.0,7: 0.0,8: 0.0,9: 0.0,10: 0.0,11: 0.0,}
-
-selected = {0: True,1: True,2: True,3: True,4: True,5: True,6: True,7: True,8: True,9: True,10: True,11: True,}
-
-uv = {0: {1: (0,0),3: (1,0),2: (1,1),0: (0,1),},1: {3: (0,0),7: (1,0),6: (1,1),2: (0,1),},2: {7: (0,0),5: (1,0),4: (1,1),6: (0,1),},3: {5: (0,0),1: (1,0),0: (1,1),4: (0,1),},4: {0: (0,0),2: (1,0),6: (1,1),4: (0,1),},5: {5: (0,0),7: (1,0),3: (1,1),1: (0,1),},}
-
-
-
-
 bl_info = {
 	"name": "CreateMesh",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201601111212),
+	"version": (0, 0, 201601131151),
 	"blender": (2, 76, 0),
 	"location": "View3D > Object > Add Mesh > DumpedMesh",
 	"description": "Adds a mesh object to the scene that was created with the DumpMesh addon",
@@ -53,62 +34,145 @@ bl_info = {
 import bpy
 import bmesh
 
-def geometry():
+class DumpMesh:
 
-	# we check if certain lists and dicts are defined
-	have_seams 		= 'seams' + suffix in globals()
-	have_crease 	= 'crease' + suffix in globals()
-	have_selected 	= 'selected' + suffix in globals()
-	have_uv 		= 'uv' + suffix in globals()
+	# most elements in an attribute layer can be assigned to directly
+	# if they are floats and if they are Vectors (or Colors) they can
+	# be assigned a tuple without problems. However, some specific types
+	# need the value to be assigned to a specific attribute and for
+	# those we have a mapping here. BMTexPoly does not behave and is not
+	# documented well (Blender 2.76) so we ignore it. 
+	attributemapping = dict(BMLoopUV=lambda ob,v: setattr(ob,'uv',v),
+							BMVertSkin=lambda ob,v: setattr(ob,'radius',v),
+							BMTexPoly=lambda ob,v: None)
 
-	# we deliberately shadow the global entries so we don't have to deal
-	# with the suffix if it's there
-	verts 		= globals()['verts' + suffix]
-	edges 		= globals()['edges' + suffix]
-	faces 		= globals()['faces' + suffix]
-	if have_seams:		seams 		= globals()['seams' + suffix]
-	if have_crease:		crease 		= globals()['crease' + suffix]
-	if have_selected:	selected 	= globals()['selected' + suffix]
-	if have_uv:			uv 			= globals()['uv' + suffix]
+	def valmap(self, sample):
+		name = sample.__class__.__name__
+		if name in self.attributemapping:
+			return self.attributemapping[name]
+		return None
 
-	bm = bmesh.new()
+	def geometry(self):
 
-	for v in verts:
-		bm.verts.new(v)
-	bm.verts.ensure_lookup_table()  # ensures bm.verts can be indexed
-	bm.verts.index_update()         # ensures all bm.verts have an index (= different thing!)
+		bm = bmesh.new()
 
-	for n,e in enumerate(edges):
-		edge = bm.edges.new(bm.verts[v] for v in e)
-		if have_seams:
-			edge.seam = seams[n]
-		if have_selected:
-			edge.select = selected[n]
+		verts = self.__class__.verts
+		edges = self.__class__.edges
+		faces = self.__class__.faces
+		
+		for n,v in enumerate(verts):
+			bm.verts.new(v)
+		bm.verts.ensure_lookup_table()  # ensures bm.verts can be indexed
+		bm.verts.index_update()         # ensures all bm.verts have an index (= different thing!)
+		if hasattr(self.__class__,'vert_attributes'):
+			for attr, values in self.__class__.vert_attributes.items():
+				for v,val in zip(bm.verts, values):
+					setattr(v,attr,val)
 
-	bm.edges.ensure_lookup_table()
-	bm.edges.index_update()
+		for n,e in enumerate(edges):
+			edge = bm.edges.new(bm.verts[v] for v in e)
+		bm.edges.ensure_lookup_table()
+		bm.edges.index_update()
+		if hasattr(self.__class__,'edge_attributes'):
+			for attr, values in self.__class__.edge_attributes.items():
+				for e,val in zip(bm.edges, values):
+					setattr(e,attr,val)
 
-	if have_crease:
-		cl = bm.edges.layers.crease.new()
-		for n,e in enumerate(bm.edges):
-			e[cl] = crease[n]
+		for n,f in enumerate(faces):
+			bm.faces.new(bm.verts[v] for v in f)
+		bm.faces.ensure_lookup_table()
+		bm.faces.index_update()
+		if hasattr(self.__class__,'face_attributes'):
+			for attr, values in self.__class__.face_attributes.items():
+				for f,val in zip(bm.faces, values):
+					setattr(f,attr,val)
 
-	for f in faces:
-		bm.faces.new(bm.verts[v] for v in f)
+		for etype in ('verts', 'edges', 'faces'):
+			seq = getattr(bm, etype)
+			bmlayers = seq.layers
+			if hasattr(self.__class__, etype + '_layers'):
+				for layertype, layers in getattr(self.__class__, etype + '_layers').items():
+					bmlayertype = getattr(bmlayers, layertype)
+					for layername, values in layers.items():
+						bmlayer = bmlayertype.new(layername) # fresh object so we don't check if the layer already exists
+						valmap = self.valmap(seq[0][bmlayer])
+						for n, ele in enumerate(seq):
+							if valmap is None:
+								ele[bmlayer] = values[n]
+							else:
+								valmap(ele[bmlayer],values[n])
 
-	bm.faces.ensure_lookup_table()
-	bm.faces.index_update()
+		bmlayers = bm.loops.layers
+		if hasattr(self.__class__, 'loops_layers'):
+			for layertype, layers in getattr(self.__class__, 'loops_layers').items():
+				bmlayertype = getattr(bmlayers, layertype)
+				attrname = self.__class__.attributemapping[layertype] if layertype in self.__class__.attributemapping else None
+				for layername, values in layers.items():
+					bmlayer = bmlayertype.new(layername) # fresh object so we don't check if the layer already exists
+					# we assume all loops will be numbered in ascending order
+					# bm.faces[i].loops.index_update() is of no use, since it
+					# start numbering again at 0 for this set of loops, so there
+					# is no way to update the indices of all loop in in go,
+					# except by converting the bm to a regular mesh, in which
+					# case it happens automagically.
+					loopindex = 0
+					for face in bm.faces:
+						for loop in face.loops:
+							val = values[face.index][loopindex]
+							valmap = self.valmap(loop[bmlayer])
+							if valmap is None:
+								loop[bmlayer] = val
+							else:
+								valmap(loop[bmlayer],val)
+							loopindex += 1
 
-	if have_uv:
-		uv_layer = bm.loops.layers.uv.new()
-		for face in bm.faces:
-			for loop in face.loops:
-				loop[uv_layer].uv = uv[face.index][loop.vert.index]
+		return bm
 
-	return bm
+	# bmesh.types.BMesh cannot be subclassed, but this way we can almost
+	# let DumpMesh derived classes behave like a class factory whose
+	# instances return a BMesh
+
+	def __call__(self):
+		return self.geometry()
+
+class Cube(DumpMesh):
+	verts = [(-1,-1,-1),(-1,-1,1),(-1,1,-1),(-1,1,1),(1,-1,-1),(1,-1,1),(1,1,-1),(1,1,1),]
+
+	edges = [(0, 1),(1, 3),(3, 2),(2, 0),(3, 7),(7, 6),(6, 2),(7, 5),(5, 4),(4, 6),(5, 1),(0, 4),]
+
+	faces = [(1, 3, 2, 0),(3, 7, 6, 2),(7, 5, 4, 6),(5, 1, 0, 4),(0, 2, 6, 4),(5, 7, 3, 1),]
+
+	verts_layers = {'bevel_weight': {}, 'deform': {}, 'float': {}, 'int': {}, 'paint_mask': {}, 'shape': {}, 'skin': {'': {0:(0.25, 0.25),1:(0.25, 0.25),2:(0.25, 0.25),3:(0.25, 0.25),4:(0.25, 0.25),5:(0.25, 0.25),6:(0.25, 0.25),7:(0.25, 0.25),}, }, 'string': {}, 	}
+
+	edges_layers = {'bevel_weight': {}, 'crease': {'SubSurfCrease': {0:0.0,1:0.0,2:0.0,3:0.0,4:0.0,5:1.0,6:0.0,7:1.0,8:1.0,9:1.0,10:0.0,11:0.0,}, }, 'float': {}, 'freestyle': {}, 'int': {}, 'string': {}, 	}
+
+	faces_layers = {'float': {}, 'freestyle': {}, 'int': {}, 'string': {}, 'tex': {'UVMap': {0:None,1:None,2:None,3:None,4:None,5:None,}, }, 	}
+
+	loops_layers = {'color': {'Col': {0: {0:(1.0, 1.0, 1.0),1:(1.0, 1.0, 1.0),2:(1.0, 1.0, 1.0),3:(1.0, 1.0, 1.0),},1: {4:(1.0, 1.0, 1.0),5:(1.0, 1.0, 1.0),6:(1.0, 1.0, 1.0),7:(1.0, 1.0, 1.0),},2: {8:(1.0, 1.0, 1.0),9:(1.0, 1.0, 1.0),10:(1.0, 1.0, 1.0),11:(1.0, 1.0, 1.0),},3: {12:(1.0, 0.15294118225574493, 0.14901961386203766),13:(1.0, 0.007843137718737125, 0.0),14:(1.0, 0.007843137718737125, 0.0),15:(1.0, 0.007843137718737125, 0.0),},4: {16:(1.0, 1.0, 1.0),17:(1.0, 1.0, 1.0),18:(1.0, 1.0, 1.0),19:(1.0, 1.0, 1.0),},5: {20:(1.0, 1.0, 1.0),21:(1.0, 1.0, 1.0),22:(1.0, 1.0, 1.0),23:(1.0, 1.0, 1.0),},},},'float': {},'int': {},'string': {},'uv': {'UVMap': {0: {0:(0.33333346247673035, 0.6666666269302368),1:(0.33333340287208557, 0.3333333730697632),2:(0.6666666865348816, 0.3333333432674408),3:(0.6666667461395264, 0.6666666269302368),},1: {4:(3.973642037635727e-08, 0.6666666865348816),5:(0.0, 0.33333340287208557),6:(0.333333283662796, 0.3333333432674408),7:(0.3333333432674408, 0.6666666269302368),},2: {8:(1.291433733285885e-07, 0.3333333432674408),9:(0.0, 8.940693874137651e-08),10:(0.3333333134651184, 0.0),11:(0.33333340287208557, 0.33333325386047363),},3: {12:(0.33333340287208557, 3.9736416823643594e-08),13:(0.6666666865348816, 0.0),14:(0.6666667461395264, 0.33333325386047363),15:(0.33333346247673035, 0.3333333134651184),},4: {16:(1.0, 0.0),17:(1.0, 0.33333322405815125),18:(0.6666667461395264, 0.33333322405815125),19:(0.6666667461395264, 2.9802313505911115e-08),},5: {20:(0.0, 0.6666667461395264),21:(0.33333325386047363, 0.6666666865348816),22:(0.333333283662796, 0.9999999403953552),23:(4.967052547044659e-08, 0.9999999403953552),},},},	}
+
+	vert_attributes = {
+	'normal' : [(-0.5773491859436035, -0.5773491859436035, -0.5773491859436035), (-0.5773491859436035, -0.5773491859436035, 0.5773491859436035), (-0.5773491859436035, 0.5773491859436035, -0.5773491859436035), (-0.5773491859436035, 0.5773491859436035, 0.5773491859436035), (0.5773491859436035, -0.5773491859436035, -0.5773491859436035), (0.5773491859436035, -0.5773491859436035, 0.5773491859436035), (0.5773491859436035, 0.5773491859436035, -0.5773491859436035), (0.5773491859436035, 0.5773491859436035, 0.5773491859436035)],
+	'select' : [False, True, False, True, False, True, False, True],
+	}
+
+	edge_attributes = {
+	'seam' : [False, False, False, False, False, False, False, False, False, False, False, False],
+	'smooth' : [True, True, True, True, True, True, True, True, True, True, True, True],
+	'select' : [False, True, False, False, True, False, False, True, False, False, True, False],
+	}
+
+	face_attributes = {
+	'normal' : [(-1.0, 0.0, 0.0), (0.0, 1.0, -0.0), (1.0, 0.0, -0.0), (0.0, -1.0, 0.0), (-0.0, 0.0, -1.0), (-0.0, 0.0, 1.0)],
+	'smooth' : [False, False, False, False, False, False],
+	'select' : [False, False, False, False, False, True],
+	}
+
+
+
+meshes = [ Cube ]
 
 class CreateMesh(bpy.types.Operator):
-	"""Add a ladder mesh object to the scene"""
+	"""Add mesh objects to the scene"""
 	bl_idname = "mesh.createmesh"
 	bl_label = "CreateMesh"
 	bl_options = {'REGISTER', 'UNDO'}
@@ -118,25 +182,28 @@ class CreateMesh(bpy.types.Operator):
 		return context.mode == 'OBJECT'
 
 	def execute(self, context):
-		me = bpy.data.meshes.new(name='DumpedMesh')
-		ob = bpy.data.objects.new('DumpedMesh', me)
+		for mesh in meshes:
+			meshfactory = mesh()
 
-		bm = geometry()
+			me = bpy.data.meshes.new(name=meshfactory.__class__.__name__)
+			ob = bpy.data.objects.new(meshfactory.__class__.__name__, me)
 
-		# write the bmesh to the mesh
-		bm.to_mesh(me)
-		me.show_edge_seams = True
-		me.update()
-		bm.free()
+			bm = meshfactory()
 
-		# associate the mesh with the object
-		ob.data = me
+			# write the bmesh to the mesh
+			bm.to_mesh(me)
+			me.show_edge_seams = True
+			me.update()
+			bm.free()
 
-		# link the object to the scene & make it active and selected
-		context.scene.objects.link(ob)
-		context.scene.update()
-		context.scene.objects.active = ob
-		ob.select = True
+			# associate the mesh with the object
+			ob.data = me
+
+			# link the object to the scene & make it active and selected
+			context.scene.objects.link(ob)
+			context.scene.update()
+			context.scene.objects.active = ob
+			ob.select = True
 
 		return {'FINISHED'}
 
