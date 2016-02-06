@@ -24,62 +24,107 @@
 from random import random
 import bpy
 
+from time import process_time as time
+
+from bpy.props import BoolProperty
+import numpy as np
+
 bl_info = {
-    "name": "Random vertex colors",
-    "author": "michel anders (varkenvarken)",
-    "version": (0, 0, 1),
-    "blender": (2, 68, 0),
-    "location": "View3D > Paint > Add random vertex colors",
-    "description": "Add random vertex colors to individual faces.",
-    "warning": "",
-    "wiki_url": "http://blenderthings.blogspot.com/2013/08/random-vertex-colors-simple-addon.html",
-    "tracker_url": "",
-    "category": "Paint"}
+	"name": "Random vertex colors",
+	"author": "michel anders (varkenvarken)",
+	"version": (0, 0, 201602061108),
+	"blender": (2, 68, 0),
+	"location": "View3D > Paint > Add random vertex colors",
+	"description": "Add random vertex colors to individual faces.",
+	"warning": "",
+	"wiki_url": "http://blenderthings.blogspot.com/2013/08/random-vertex-colors-simple-addon.html",
+	"tracker_url": "",
+	"category": "Paint"}
 
 
 class RandomVertexColors(bpy.types.Operator):
 
-    bl_idname = "mesh.random_vertex_colors"
-    bl_label = "RandomVertexColors"
-    bl_options = {'REGISTER', 'UNDO', 'PRESET'}
+	bl_idname = "mesh.random_vertex_colors"
+	bl_label = "RandomVertexColors"
+	bl_options = {'REGISTER', 'UNDO', 'PRESET'}
 
-    @classmethod
-    def poll(self, context):
-        # Check if we have a mesh object active and are in vertex paint mode
-        p = (context.mode == 'PAINT_VERTEX' and
-             isinstance(context.scene.objects.active, bpy.types.Object) and
-             isinstance(context.scene.objects.active.data, bpy.types.Mesh))
-        return p
+	timeit = BoolProperty(name="Log timing in console", default=False)
+	usenumpy = BoolProperty(name="Use Numpy", default=False)
+	
+	@classmethod
+	def poll(self, context):
+		# Check if we have a mesh object active and are in vertex paint mode
+		p = (context.mode == 'PAINT_VERTEX' and
+			 isinstance(context.scene.objects.active, bpy.types.Object) and
+			 isinstance(context.scene.objects.active.data, bpy.types.Mesh))
+		return p
 
-    def execute(self, context):
-        bpy.ops.object.mode_set(mode='OBJECT')
-        mesh = context.scene.objects.active.data
-        vertex_colors = mesh.vertex_colors.active.data
-        for poly in mesh.polygons:
-            color = [random(), random(), random()]
-            for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                vertex_colors[loop_index].color = color
-        bpy.ops.object.mode_set(mode='VERTEX_PAINT')
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.object.mode_set(mode='VERTEX_PAINT')
-        context.scene.update()
-        return {'FINISHED'}
+	def execute(self, context):
+		bpy.ops.object.mode_set(mode='OBJECT')
+		mesh = context.scene.objects.active.data
+		vertex_colors = mesh.vertex_colors.active.data
+		polygons = mesh.polygons
+		verts = mesh.vertices
+		npolygons = len(polygons)
+		nverts = len(verts)
+		nloops = len(vertex_colors)
+
+		if self.usenumpy:
+			start = time()
+
+			startloop = np.empty(npolygons, dtype=np.int)
+			numloops = np.empty(npolygons, dtype=np.int)
+			polygon_indices = np.empty(npolygons, dtype=np.int)
+
+			polygons.foreach_get('index', polygon_indices)
+			polygons.foreach_get('loop_start', startloop)
+			polygons.foreach_get('loop_total', numloops)
+
+			colors = np.random.random_sample((npolygons,3))
+			loopcolors = np.empty((nloops,3))
+
+			#for s,n,pi in np.nditer([startloop, numloops, polygon_indices]):
+			#	loopcolors[slice(s,s+n)] = colors[pi]
+			loopcolors[startloop] = colors[polygon_indices]
+			numloops -= 1
+			nz = np.flatnonzero(numloops)
+			while len(nz):
+				startloop[nz] += 1
+				loopcolors[startloop[nz]] = colors[polygon_indices[nz]]
+				numloops[nz] -= 1
+				nz = np.flatnonzero(numloops)
+
+			loopcolors = loopcolors.flatten()
+			vertex_colors.foreach_set("color", loopcolors)
+		else:
+			start = time()
+			for poly in polygons:
+				color = [random(), random(), random()]
+				for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+					vertex_colors[loop_index].color = color
+		if self.timeit:
+			print("%s: %d/%d (verts/polys) in %.1f seconds"%("numpy" if self.usenumpy else "plain", nverts, npolygons, time()-start))
+		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
+		context.scene.update()
+		return {'FINISHED'}
 
 
 def menu_func(self, context):
-    self.layout.operator(RandomVertexColors.bl_idname, text=bl_info['description'],
-                         icon='PLUGIN')
+	self.layout.operator(RandomVertexColors.bl_idname, text=bl_info['description'],
+						 icon='PLUGIN')
 
 
 def register():
-    bpy.utils.register_module(__name__)
-    bpy.types.VIEW3D_MT_paint_vertex.append(menu_func)
+	bpy.utils.register_module(__name__)
+	bpy.types.VIEW3D_MT_paint_vertex.append(menu_func)
 
 
 def unregister():
-    bpy.types.IVIEW3D_MT_paint_vertex.remove(menu_func)
-    bpy.utils.unregister_module(__name__)
+	bpy.types.VIEW3D_MT_paint_vertex.remove(menu_func)
+	bpy.utils.unregister_module(__name__)
 
 
 if __name__ == "__main__":
-    register()
+	register()
