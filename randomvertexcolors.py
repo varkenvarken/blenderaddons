@@ -19,6 +19,9 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
+# a special thank you to Linus Yng and @ambi for their feedback on the
+# numpy related changes.
+
 # <pep8 compliant>
 
 from random import random
@@ -32,7 +35,7 @@ import numpy as np
 bl_info = {
 	"name": "Random vertex colors",
 	"author": "michel anders (varkenvarken)",
-	"version": (0, 0, 201602061108),
+	"version": (0, 0, 201602071043),
 	"blender": (2, 68, 0),
 	"location": "View3D > Paint > Add random vertex colors",
 	"description": "Add random vertex colors to individual faces.",
@@ -50,7 +53,7 @@ class RandomVertexColors(bpy.types.Operator):
 
 	timeit = BoolProperty(name="Log timing in console", default=False)
 	usenumpy = BoolProperty(name="Use Numpy", default=False)
-	
+
 	@classmethod
 	def poll(self, context):
 		# Check if we have a mesh object active and are in vertex paint mode
@@ -72,19 +75,21 @@ class RandomVertexColors(bpy.types.Operator):
 		if self.usenumpy:
 			start = time()
 
-			startloop = np.empty(npolygons, dtype=np.int)
-			numloops = np.empty(npolygons, dtype=np.int)
-			polygon_indices = np.empty(npolygons, dtype=np.int)
+			startloop = np.empty(npolygons, dtype=np.int32)
+			numloops = np.empty(npolygons, dtype=np.int32)
+			polygon_indices = np.empty(npolygons, dtype=np.int32)
 
 			polygons.foreach_get('index', polygon_indices)
 			polygons.foreach_get('loop_start', startloop)
 			polygons.foreach_get('loop_total', numloops)
 
-			colors = np.random.random_sample((npolygons,3))
-			loopcolors = np.empty((nloops,3))
+			colors = np.random.random_sample((npolygons,3)).astype(np.float32)
+			loopcolors = np.empty((nloops,3), dtype=np.float32)
 
+			#the following code is *much* slower than doing everrything in numpy
 			#for s,n,pi in np.nditer([startloop, numloops, polygon_indices]):
 			#	loopcolors[slice(s,s+n)] = colors[pi]
+
 			loopcolors[startloop] = colors[polygon_indices]
 			numloops -= 1
 			nz = np.flatnonzero(numloops)
@@ -103,7 +108,7 @@ class RandomVertexColors(bpy.types.Operator):
 				for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
 					vertex_colors[loop_index].color = color
 		if self.timeit:
-			print("%s: %d/%d (verts/polys) in %.1f seconds"%("numpy" if self.usenumpy else "plain", nverts, npolygons, time()-start))
+			print("%s: %d/%d (verts/polys) in %.2f seconds"%("numpy" if self.usenumpy else "plain", nverts, npolygons, time()-start))
 		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
 		bpy.ops.object.mode_set(mode='EDIT')
 		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
