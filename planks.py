@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201511141025),
+	"version": (0, 0, 201602211101),
 	"blender": (2, 76, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -557,6 +557,14 @@ def updateMesh(self, context):
 		color = [rand(), rand(), rand()]
 		if o.randomuv == 'Random':
 			offset = Vector((rand(), rand(), 0))
+		if o.randomuv == 'Restricted':
+			offset = Vector((rand()*2-1, rand()*2-1, 0))
+			for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
+				co = offset + mesh.vertices[mesh.loops[loop_index].vertex_index].co
+				if co.x > o.length or co.x < 0:
+					offset[0] = 0
+				if co.y > o.width or co.y < 0:
+					offset[1] = 0
 		elif o.randomuv == 'Packed':
 			x = []
 			y = []
@@ -567,7 +575,7 @@ def updateMesh(self, context):
 		for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
 			if o.randomuv == 'Shuffle':
 				coords = uvs[mesh.loops[loop_index].vertex_index]
-			elif o.randomuv == 'Random':
+			elif o.randomuv in ('Random', 'Restricted'):
 				coords = mesh.vertices[mesh.loops[loop_index].vertex_index].co + offset
 			elif o.randomuv == 'Packed':
 				coords = uvs[mesh.loops[loop_index].vertex_index] + offset
@@ -924,7 +932,8 @@ bpy.types.Object.originy = FloatProperty(name="OriginY",
 bpy.types.Object.randomuv = EnumProperty(name="UV randomization",
 										description="Randomization mode for the uv-offset of individual planks",
 										items = [('None','None','Plain mapping from top view'),
-									         ('Random','Random','Add random offset to plain map of individual planks'),
+											 ('Random','Random','Add a random offset to the plain uv map of individual planks'),
+											 ('Restricted','Restricted','Add a random offset to the plain map but keep individual planks withing the orginal border'),
 											 ('Shuffle','Shuffle','Exchange uvmaps of simlilar planks'),
 											 ('Packed','Packed','Overlap all uvs of individual planks while maintaining their proportions')],
 										update=updateMesh)
