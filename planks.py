@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Floor Generator, a Blender addon
-#  (c) 2013,2015 Michel J. Anders (varkenvarken)
+#  (c) 2013,2015,2016 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201602211101),
+	"version": (0, 0, 201603211901),
 	"blender": (2, 76, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -149,7 +149,7 @@ def planks(n, m,
 		length, lengthvar,
 		width, widthvar,
 		longgap, shortgap,
-		offset, randomoffset,
+		offset, randomoffset, minoffset,
 		nseed,
 		randrotx, randroty, randrotz,
 		originx, originy):
@@ -176,8 +176,8 @@ def planks(n, m,
 		w = width + randuni(0, widthvar)
 		we = ws + w
 		if randomoffset:
-			e = randuni(4 * shortgap, length)  # we don't like negative plank lengths
-		while (m - e) > (4 * shortgap):
+			e = randuni(4 * shortgap + (offset if minoffset else 0.0), length)  # we don't like negative plank lengths
+		while (m - e) > (4 * shortgap + (offset if minoffset else 0.0)):
 			ll = len(verts)
 			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
 			pverts = plank(s - originx, e - originx, ws - originy, we - originy, longgap, shortgap, rot)
@@ -491,7 +491,7 @@ def updateMesh(self, context):
 												o.planklength, o.planklengthvar,
 												o.plankwidth, o.plankwidthvar,
 												o.longgap, o.shortgap,
-												o.offset, o.randomoffset,
+												o.offset, o.randomoffset, o.minoffset,
 												o.randomseed,
 												o.randrotx, o.randroty, o.randrotz,
 												o.originx, o.originy)
@@ -889,6 +889,11 @@ bpy.types.Object.randomoffset = BoolProperty(name="Offset random",
 											default=True,
 											update=updateMesh)
 
+bpy.types.Object.minoffset = BoolProperty(name="Minimum offset",
+											description="Use Offset value as a minimum when using random values for offset",
+											default=False,
+											update=updateMesh)
+
 bpy.types.Object.randomseed = IntProperty(name="Random Seed",
 										description="The seed governing random generation",
 										default=0,
@@ -1107,7 +1112,8 @@ class FloorBoards(bpy.types.Panel):
 						col2 = columns.column()
 						col1.prop(o, 'offset')
 						col2.prop(o, 'randomoffset')
-						if o.randomoffset is True:
+						col2.prop(o, 'minoffset')
+						if o.randomoffset is True and o.minoffset is False:
 							col1.enabled = False
 
 					columns = box.row()
