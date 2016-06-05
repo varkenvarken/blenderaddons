@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201603211901),
-	"blender": (2, 76, 0),
+	"version": (0, 0, 201606051530),
+	"blender": (2, 77, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
 	"warning": "",
@@ -464,11 +464,11 @@ def versaille(rows, cols, planklength, plankwidth,longgap=0, shortgap=0, randrot
 				
 				verts.extend(pverts)
 				midpoint = vcenter(pverts)
-				if uvrot > 0:
-					print(uvrot)
-					print([v - midpoint for v in pverts])
-					print([rotatep(v, Euler((0,0,radians(uvrot)),'XYZ'), midpoint) - midpoint for v in pverts])
-					print()
+				#if uvrot > 0:
+				#	print(uvrot)
+				#	print([v - midpoint for v in pverts])
+				#	print([rotatep(v, Euler((0,0,radians(uvrot)),'XYZ'), midpoint) - midpoint for v in pverts])
+				#	print()
 				uvs.append([rotatep(v, Euler((0,0,radians(uvrot)),'XYZ'), midpoint) for v in pverts])
 				faces.append((ll, ll + 3, ll + 2, ll + 1) if len(pverts)==4 else (ll, ll + 2, ll + 1))
 
@@ -649,31 +649,42 @@ def updateMesh(self, context):
 		bm.to_mesh(mesh)
 		bm.free()
 
-	
+
 	# remove all modifiers to make sure the boolean will be last & only modifier
 	n = len(o.modifiers)
 	while n > 0:
 		n -= 1
 		bpy.ops.object.modifier_remove(modifier=o.modifiers[-1].name)
-	
+
 	# add thickness
 	bpy.ops.object.mode_set(mode='EDIT')
 	bm = bmesh.from_edit_mesh(o.data)
-	
-	# extrude to give thickness
-	ret=bmesh.ops.extrude_face_region(bm,geom=bm.faces[:])
-	ret=bmesh.ops.translate(bm,vec=Vector((0,0,self.thickness)),verts=[el for el in ret['geom'] if isinstance(el, bmesh.types.BMVert)] )
-	
+
+	# extrude to given thickness
+	ret=bmesh.ops.extrude_face_region(bm,geom=bm.faces[:]) # all planks are separate faces, except when subdivided by random twist or hollowness
+	if warped:  # we have a extra subdivision
+		Z = Vector((0,0,1))
+		for el in ret['geom']:
+			if isinstance(el, bmesh.types.BMVert) and len(el.link_edges) == 4 and el.normal.dot(Z) > 0.99 : # we look start at the vertex in the middle of the 4 faces but only on the top
+				d = Vector((0,0,o.thickness + rand() * o.randomthickness))
+				verts = set(v for f in el.link_faces for v in f.verts)  # some vertices are shared, this way we make them unique
+				bmesh.ops.translate(bm, vec=d, verts=list(verts))
+	else:
+		for el in ret['geom']:
+			if isinstance(el, bmesh.types.BMFace):
+				d = Vector((0,0,o.thickness + rand() * o.randomthickness))
+				bmesh.ops.translate(bm, vec=d, verts=el.verts)
+
 	# trim excess flooring
 	ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(o.length,0,0), plane_no=(1,0,0), clear_outer=True)
 	ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(0,0,0), plane_no=(-1,0,0), clear_outer=True)
 	ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(0,o.width,0), plane_no=(0,1,0), clear_outer=True)
 	ret = bmesh.ops.bisect_plane(bm, geom=bm.verts[:]+bm.edges[:]+bm.faces[:], plane_co=(0,0,0), plane_no=(0,-1,0), clear_outer=True)
-	
+
 	# fill in holes caused by the trimming
 	open_edges = [e for e in bm.edges if len(e.link_faces)==1]
 	bmesh.ops.edgeloop_fill(bm, edges=open_edges, mat_nr=0, use_smooth=False)
-	
+
 	creases = bm.edges.layers.crease.active
 	if creases is not None:
 		for edge in open_edges:
@@ -986,6 +997,15 @@ bpy.types.Object.randrotz = FloatProperty(name="Z Rotation",
 										unit='ROTATION',
 										update=updateMesh)
 
+bpy.types.Object.randomthickness = FloatProperty(name="Thickness",
+											description="Random thickness added to a plank",
+											default=0,
+											min=0,
+											soft_max=0.05,
+											step=0.01,
+											precision=4,
+											update=updateMesh)
+
 bpy.types.Object.hollowlong = FloatProperty(name="Hollowness along plank",
 											description="Amount of curvature along a plank",
 											default=0,
@@ -1132,8 +1152,8 @@ class FloorBoards(bpy.types.Panel):
 					col2.prop(o, 'hollowlong')
 					col2.prop(o, 'hollowshort')
 					col2.prop(o, 'twist')
-
-					box.prop(o, 'randomseed')
+					col1.prop(o, 'randomthickness')
+					col2.prop(o, 'randomseed')
 
 					box.label('Miscellaneous:')
 					box.prop(o, 'usefloorplan')
