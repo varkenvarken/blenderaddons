@@ -33,7 +33,7 @@ bl_info = {
 									
 from math import atan2, asin, sin, cos, pi, degrees, sqrt
 import bpy, bmesh
-from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty, IntProperty 
+from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty, IntProperty, BoolVectorProperty
 from bpy_extras import object_utils
 
 def circle(x,y,r,s,e,w):
@@ -166,7 +166,13 @@ class BasketArch(bpy.types.Operator):
 			name="Resolution", description="Higher values = less polygons",
 			default=1,
 			min = 1)
-									
+	layers = BoolVectorProperty( # see: https://developer.blender.org/rB0f63ce61c52fce82f18df687369d513c3b6c19b1
+			name="Layers",
+			subtype='LAYER',
+			description="Object Layers",
+			size=20,
+			)
+
 	def execute(self, context):
 
 		verts_loc, faces = basket_arch(self.width, self.depth, self.height, self.resolution)
