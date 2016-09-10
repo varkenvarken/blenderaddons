@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201609101113),
+    "version": (0, 0, 201609101433),
     "blender": (2, 77, 0),
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -163,8 +163,8 @@ def get_nodes_links(context):
     return nodes, links
 
 def sanitize(s):
-	t = str.maketrans("",""," \t/\\-_:;[]")
-	return s.translate(t)
+    t = str.maketrans("",""," \t/\\-_:;[]")
+    return s.translate(t)
 
 # the node placement stuff at the start of execute() is from node wrangler
 class NSAddMultipleImages(Operator, ImportHelper):
@@ -257,29 +257,31 @@ class NSAddMultipleImages(Operator, ImportHelper):
                     node.label = sanitize(k)
 
         # the next step is to load additional files if a suffix is specified and the user did not explicitely select it already
-        for k,v in suffixes.items():
-            if not v :
-                for ext in settings.extensions.split(','):
-                    fname = prefix + k + '.' + ext.strip()
-                    #print('looking for ',fname)
-                    try:
-                        img = bpy.data.images.load(self.directory+fname,settings.link_if_exist)
+        # however, if a texture was selected that has no recognized suffix, we skip this
+        if prefix is not None:
+            for k,v in suffixes.items():
+                if not v :
+                    for ext in settings.extensions.split(','):
+                        fname = prefix + k + '.' + ext.strip()
+                        #print('looking for ',fname)
+                        try:
+                            img = bpy.data.images.load(self.directory+fname,settings.link_if_exist)
 
-                        node = nodes.new(node_type)
-                        new_nodes.append(node)
-                        node.label = sanitize(k)
-                        node.hide = True
-                        node.width_hidden = 100
-                        node.location.x = xloc
-                        node.location.y = yloc
-                        yloc -= 40
+                            node = nodes.new(node_type)
+                            new_nodes.append(node)
+                            node.label = sanitize(k)
+                            node.hide = True
+                            node.width_hidden = 100
+                            node.location.x = xloc
+                            node.location.y = yloc
+                            yloc -= 40
 
-                        node.image = img
-                        node.color_space = 'COLOR' if (k == settings.suffix_color or k == settings.suffix_diffuse) else 'NONE' # that is the string NONE
-                        #print('found ',fname)
-                        break
-                    except:
-                        pass
+                            node.image = img
+                            node.color_space = 'COLOR' if (k == settings.suffix_color or k == settings.suffix_diffuse) else 'NONE' # that is the string NONE
+                            #print('found ',fname)
+                            break
+                        except:
+                            pass
 
 
         # shift new nodes up to center of tree
@@ -296,7 +298,7 @@ class NSAddMultipleImages(Operator, ImportHelper):
         # add the new nodes to a frame
         bpy.ops.node.add_node(type='NodeFrame')
         frm = nodes.active
-        frm.label = path.basename(prefix)
+        frm.label = path.basename(prefix if prefix else 'Material')
         frm.label_size = 14  # the default of 20 will extend the shrink to fit area! bug?
         frm.use_custom_color = True
         frm.color = settings.frame_color
