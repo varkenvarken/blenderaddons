@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201609101433),
+    "version": (0, 0, 201609101509),
     "blender": (2, 77, 0),
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -306,6 +306,11 @@ class NSAddMultipleImages(Operator, ImportHelper):
         for node in new_nodes:
             node.parent = frm
  
+        #print(context.area.type)
+        context.area.tag_redraw() # this in itself is not enough to trigger a redraw...
+        
+        bpy.ops.node.view_all()
+        
         return {'FINISHED'}
 
 
