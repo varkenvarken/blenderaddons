@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201609101509),
+    "version": (0, 0, 201609131617),
     "blender": (2, 77, 0),
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -172,8 +172,16 @@ class NSAddMultipleImages(Operator, ImportHelper):
     bl_idname = 'node.ns_add_multiple_images'
     bl_label = 'Open a set of images'
     bl_options = {'REGISTER', 'UNDO'}
+
     directory = StringProperty(subtype="DIR_PATH")
+
     files = CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
+
+    filter_glob = StringProperty(
+            default="*Color*",
+            options={'HIDDEN'},
+            maxlen=255,  # Max internal buffer length, longer would be clamped.
+            )
 
     def execute(self, context):
         settings = context.user_preferences.addons[__name__].preferences
