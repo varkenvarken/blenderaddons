@@ -351,7 +351,7 @@ def updateObjects(context):
             ret = bmesh.ops.spin(
                     bm,
                     geom=geom,
-                    angle=g.helicalangle,
+                    angle=g.helicalangle / nsteps,
                     steps=1,
                     use_duplicate=False,
                     dvec=(0.0, 0.0, g.width / nsteps),
