@@ -217,16 +217,16 @@ def setLocation(object, context, seen, rot_changed):
         rotation = object.rotation * (1.0 + ratio) - driverrotation * ratio
         if object.name not in seen:
             if object.twin == 'Up':
-                offset += 1
+                offset += context.scene.objects[object.driver].width
             elif object.twin == 'Down':
-                offset -= 1
+                offset -= object.width
 
             object.location = context.scene.objects[object.driver].location
             if object.twin == 'None':  # ! string not None object
                 object.location.x += nx
                 object.location.y += ny
                 print(object.name, degrees(rotation), degrees(driverrotation), context.scene.objects[object.driver].nteeth, object.nteeth)
-            object.location.z += offset * 0.1
+            object.location.z += offset # the offset should be based on the width of the gear and the driver
             #print(object.name, '-->', object.driver, 'driver changed',object.driver in rot_changed, 'odd', object.nteeth % 2 == 1, 'rotated', rot_changed,'seen', seen)
             if ((object.driver in rot_changed) and (object.nteeth % 2 == 1) or (object.driver not in rot_changed) and (object.nteeth % 2 == 0)):
                     rotate_mesh(object, Euler((0, 0, PI / object.nteeth + rotation), 'XYZ'))  # half a tooth + additional rotation
