@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "DryStone",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20141102),
-	"blender": (2, 71, 0),
+	"version": (0, 0, 201612130737),
+	"blender": (2, 78, 0),
 	"location": "View3D > Add > Mesh > DryStone",
 	"description": "Add a mesh of irregular stacked blocks.",
 	"warning": "",
@@ -185,7 +185,7 @@ class DryStone(bpy.types.Operator):
 		uv_layer = me.uv_layers.active.data
 		vertex_colors = me.vertex_colors.new().data
 		for poly in me.polygons:
-			offset = Vector((random(), random(), 0)) if obj.randomuv else Vector((0, 0, 0))
+			offset = Vector((random(), random(), 0)) if self.randomuv else Vector((0, 0, 0))
 			color = [random(), random(), random()]
 			for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
 				coords = me.vertices[me.loops[loop_index].vertex_index].co
