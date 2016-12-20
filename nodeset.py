@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201609131617),
+    "version": (0, 0, 201612200705),
     "blender": (2, 77, 0),
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -93,6 +93,11 @@ class NodeSet(bpy.types.AddonPreferences):
         default='_Emissive',
         description="Suffix that identifies the emission map")
 
+    suffix_ao = StringProperty(
+        name="AO Suffix",
+        default='_ambient_occlusion',
+        description="Suffix that identifies the ao map")
+
     extensions = StringProperty(
         name="Extensions",
         default='png,jpg,jpeg,exr,hdr',
@@ -124,6 +129,7 @@ class NodeSet(bpy.types.AddonPreferences):
         col.prop(self, "suffix_opacity")
         col.prop(self, "suffix_roughness")
         col.prop(self, "suffix_specular")
+        col.prop(self, "suffix_ao")
         col.label(" ")
         col.prop(self, "extensions")
         col.prop(self, "link_if_exist")
@@ -232,6 +238,8 @@ class NSAddMultipleImages(Operator, ImportHelper):
             suffixes[settings.suffix_roughness] = False
         if settings.suffix_specular != '' :
             suffixes[settings.suffix_specular] = False
+        if settings.suffix_ao != '' :
+            suffixes[settings.suffix_ao] = False
 
 
         new_nodes = []
