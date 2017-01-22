@@ -56,6 +56,41 @@ def object_list(objects):
 
 	return [objects[i] for i in shortest_chain]
 
+def object_list2(objects, active=0):
+	"""
+	Return an approximate shortest path through objects starting at the
+	active index using the nearest neighbor heuristic.
+	"""
+
+	s = time()
+
+	# calculate a kd tree to quickly answer nearest neighbor queries
+	kd = kdtree.KDTree(len(objects))
+	for i, ob in enumerate(objects):
+		kd.insert(ob.location, i)
+	kd.balance()
+
+	current = objects[active]
+	chain = [current]  # we start at the chosen object
+	added = {active}
+	for i in range(1,len(objects)):  # we know how many objects to add
+		# when looking for the nearest neighbor we start with two neigbors
+		# (because we include the object itself in the search) and if
+		# the other neigbors is not yet in the chain we add it, otherwise
+		# we expand our search to a maximum of the total number of objects
+		for n in range(2,len(objects)):
+			neighbors = { index for _,index,_ in kd.find_n(current.location, n) }
+			neighbors -= added
+			if neighbors:  # strictly speaking we shoudl assert that len(neighbors) == 1
+				chain.extend(objects[i] for i in neighbors)
+				added |= neighbors
+				break
+		current = chain[-1]
+
+	print("{n:d} objects {t:.1f}s".format(t=time()-s, n=len(objects)))
+
+	return chain
+
 class ChainSelectedObjects(bpy.types.Operator):
 	bl_idname = 'object.chainselectedobjects'
 	bl_label = 'Chain selected objects'
@@ -67,7 +102,8 @@ class ChainSelectedObjects(bpy.types.Operator):
 			and len(context.selected_objects) > 1)
 
 	def execute(self, context):
-		objects = object_list(context.selected_objects.copy())
+		so = context.selected_objects.copy()
+		objects = object_list2(so, so.index(context.active_object))
 		for ob in objects:
 			ob.select = False
 
