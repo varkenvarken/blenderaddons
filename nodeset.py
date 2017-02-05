@@ -19,8 +19,8 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201612200705),
-    "blender": (2, 77, 0),
+    "version": (0, 0, 201702051650),
+    "blender": (2, 78, 0),
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
     "warning": "",
@@ -33,7 +33,7 @@ from bpy.types import Operator, Panel, Menu
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty, StringProperty, FloatVectorProperty, CollectionProperty
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Vector
-from os import path
+from os import path, listdir
 from glob import glob
 from copy import copy
 from collections import OrderedDict as odict
@@ -111,6 +111,21 @@ class NodeSet(bpy.types.AddonPreferences):
         subtype='COLOR_GAMMA',
         size=3)
 
+    filter_fragment = StringProperty(
+        name="Filter fragment",
+        default='Color',
+        description="Name fragment to use when filtering list of textures")
+
+    case_sensitive = BoolProperty(
+        name="Case sensitive",
+        default=False,
+        description="Case sensitivity of suffix matching")
+
+    filter_to_color = BoolProperty(
+        name="Filter",
+        default=True,
+        description="Limit list of textures in file selector files containing Filter fragment")
+
     link_if_exist = BoolProperty(
         name="Link existing",
         default=True,
@@ -130,6 +145,11 @@ class NodeSet(bpy.types.AddonPreferences):
         col.prop(self, "suffix_roughness")
         col.prop(self, "suffix_specular")
         col.prop(self, "suffix_ao")
+        col.prop(self, "case_sensitive")
+        col.label(" ")
+        col.prop(self, "filter_to_color")
+        if self.filter_to_color:
+            col.prop(self, "filter_fragment")
         col.label(" ")
         col.prop(self, "extensions")
         col.prop(self, "link_if_exist")
@@ -144,7 +164,7 @@ def node_mid_pt(node, axis):
     else:
         d = 0
     return d
-       
+
 # from node wrangler
 def get_nodes_links(context):
     space = context.space_data
@@ -173,7 +193,7 @@ def sanitize(s):
     return s.translate(t)
 
 # the node placement stuff at the start of execute() is from node wrangler
-class NSAddMultipleImages(Operator, ImportHelper):
+class NSAddMultipleImages(Operator):
     """Add a collection of textures with a common naming convention"""
     bl_idname = 'node.ns_add_multiple_images'
     bl_label = 'Open a set of images'
@@ -184,14 +204,35 @@ class NSAddMultipleImages(Operator, ImportHelper):
     files = CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
 
     filter_glob = StringProperty(
-            default="*Color*",
+            default="*.*",
             options={'HIDDEN'},
             maxlen=255,  # Max internal buffer length, longer would be clamped.
             )
 
+    filepath = StringProperty(
+            name="File Path",
+            description="Filepath used for importing the file",
+            maxlen=1024,
+            subtype='FILE_PATH',
+            )
+
+    # needed for mix-ins
+    order = [
+        "filepath",
+        ]
+
+    def invoke(self, context, event):
+        settings = context.user_preferences.addons[__name__].preferences
+        if settings.filter_to_color:
+            self.filter_glob = "*" + settings.filter_fragment + "*"
+        else:
+            self.filter_glob = "*.*"
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
     def execute(self, context):
         settings = context.user_preferences.addons[__name__].preferences
-        
+
         nodes, links = get_nodes_links(context)
         nodes_list = [node for node in nodes]
         if nodes_list:
@@ -241,6 +282,11 @@ class NSAddMultipleImages(Operator, ImportHelper):
         if settings.suffix_ao != '' :
             suffixes[settings.suffix_ao] = False
 
+        def endswith(s, suffix):
+            if not settings.case_sensitive:
+                s = s.lower()
+                suffix = suffix.lower()
+            return s.endswith(suffix)
 
         new_nodes = []
         prefix = None
@@ -250,7 +296,7 @@ class NSAddMultipleImages(Operator, ImportHelper):
             fname = f.name
             basename = path.basename(path.splitext(fname)[0])
             ext = path.splitext(fname)[1]
-            
+
             node = nodes.new(node_type)
             new_nodes.append(node)
             node.label = fname
@@ -263,11 +309,11 @@ class NSAddMultipleImages(Operator, ImportHelper):
             img = bpy.data.images.load(self.directory+fname,settings.link_if_exist)
             node.image = img
             # we only mark a file with a color suffix as color data, all other as non color data
-            node.color_space = 'COLOR' if (basename.endswith(settings.suffix_color) or basename.endswith(settings.suffix_diffuse)) else 'NONE' # that is the string NONE
-            
+            node.color_space = 'COLOR' if (endswith(basename, settings.suffix_color) or endswith(basename, settings.suffix_diffuse)) else 'NONE' # that is the string NONE
+
             # we check if the loaded file is one in the specified list of suffixes and mark that one as seen
             for k,v in suffixes.items():
-                if basename.endswith(k):
+                if endswith(basename, k):
                     suffixes[k] = True
                     prefix = fname[:-len(k+ext)] # prefix is the filepath
                     node.label = sanitize(k)
@@ -275,10 +321,26 @@ class NSAddMultipleImages(Operator, ImportHelper):
         # the next step is to load additional files if a suffix is specified and the user did not explicitely select it already
         # however, if a texture was selected that has no recognized suffix, we skip this
         if prefix is not None:
+            files = listdir(self.directory)
+            fileslower = [f.lower() for f in files]
+            #print(files)
+            #print(fileslower)
             for k,v in suffixes.items():
-                if not v :
+                if not v : # haven't loaded this filename yet explicitely
                     for ext in settings.extensions.split(','):
                         fname = prefix + k + '.' + ext.strip()
+
+                        if settings.case_sensitive:
+                            if fname not in files:
+                                break
+                        else:
+                            if fname.lower() not in fileslower:
+                                break
+                            for f in files:
+                                if fname.lower() == f.lower():
+                                    fname = f
+                                    break
+
                         #print('looking for ',fname)
                         try:
                             img = bpy.data.images.load(self.directory+fname,settings.link_if_exist)
@@ -305,7 +367,7 @@ class NSAddMultipleImages(Operator, ImportHelper):
         for node in new_nodes:
             node.select = True
             node.location.y += (list_size/2)
-            
+
         # sort the y location based on the label
         sortedy = dict(zip(sorted(n.label for n in new_nodes), sorted([n.location.y for n in new_nodes], reverse=True)))
         for n in new_nodes:
@@ -321,12 +383,12 @@ class NSAddMultipleImages(Operator, ImportHelper):
 
         for node in new_nodes:
             node.parent = frm
- 
+
         #print(context.area.type)
         context.area.tag_redraw() # this in itself is not enough to trigger a redraw...
-        
+
         bpy.ops.node.view_all()
-        
+
         return {'FINISHED'}
 
 
@@ -334,7 +396,7 @@ def multipleimages_menu_func(self, context):
     col = self.layout.column(align=True)
     col.operator(NSAddMultipleImages.bl_idname, text="Set of images")
     col.separator()
-    
+
 
 def register():
     bpy.utils.register_module(__name__)
