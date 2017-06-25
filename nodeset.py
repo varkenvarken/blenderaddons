@@ -19,8 +19,8 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201702051650),
-    "blender": (2, 78, 0),
+    "version": (0, 0, 201706251223),
+    "blender": (2, 78, 4),  # needs support for Principled shader to work
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
     "warning": "",
@@ -165,28 +165,35 @@ def node_mid_pt(node, axis):
         d = 0
     return d
 
-# from node wrangler
+# mainly from node wrangler
 def get_nodes_links(context):
     space = context.space_data
     tree = space.node_tree
-    nodes = tree.nodes
-    links = tree.links
-    active = nodes.active
-    context_active = context.active_node
-    # check if we are working on regular node tree or node group is currently edited.
-    # if group is edited - active node of space_tree is the group
-    # if context.active_node != space active node - it means that the group is being edited.
-    # in such case we set "nodes" to be nodes of this group, "links" to be links of this group
-    # if context.active_node == space.active_node it means that we are not currently editing group
-    is_main_tree = True
-    if active:
-        is_main_tree = context_active == active
-    if not is_main_tree:  # if group is currently edited
-        tree = active.node_tree
+    nodes, links = None, None
+    if tree:
         nodes = tree.nodes
         links = tree.links
+        active = nodes.active
+        context_active = context.active_node
+        # check if we are working on regular node tree or node group is currently edited.
+        # if group is edited - active node of space_tree is the group
+        # if context.active_node != space active node - it means that the group is being edited.
+        # in such case we set "nodes" to be nodes of this group, "links" to be links of this group
+        # if context.active_node == space.active_node it means that we are not currently editing group
+        is_main_tree = True
+        if active:
+            is_main_tree = context_active == active
+        if not is_main_tree:  # if group is currently edited
+            tree = active.node_tree
+            nodes = tree.nodes
+            links = tree.links
 
     return nodes, links
+
+def link_nodes(nodetree, fromnode, fromsocket, tonode, tosocket):
+    socket_in = tonode.inputs[tosocket]
+    socket_out = fromnode.outputs[fromsocket]
+    return nodetree.links.new(socket_in, socket_out)
 
 def sanitize(s):
     t = str.maketrans("",""," \t/\\-_:;[]")
@@ -198,6 +205,11 @@ class NSAddMultipleImages(Operator):
     bl_idname = 'node.ns_add_multiple_images'
     bl_label = 'Open a set of images'
     bl_options = {'REGISTER', 'UNDO'}
+
+    shader = BoolProperty(
+        name="Add shader",
+        default=False,
+        description="Add principled shader and Normal map node")
 
     directory = StringProperty(subtype="DIR_PATH")
 
@@ -221,6 +233,10 @@ class NSAddMultipleImages(Operator):
         "filepath",
         ]
 
+    @classmethod
+    def poll(cls, context):
+            return context.space_data.node_tree is not None
+
     def invoke(self, context, event):
         settings = context.user_preferences.addons[__name__].preferences
         if settings.filter_to_color:
@@ -230,14 +246,27 @@ class NSAddMultipleImages(Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+    @staticmethod
+    def find_in_nodes(nodes,ttype):
+        for n in nodes:
+            if n.label.lower().find(ttype.lower())>=0:
+                return n
+        return None
+
     def execute(self, context):
         settings = context.user_preferences.addons[__name__].preferences
 
         nodes, links = get_nodes_links(context)
+
+        if nodes is None:
+            return {'FINISHED'}
+
+        addshader = (context.space_data.node_tree.type == 'SHADER' and self.shader)
+
         nodes_list = [node for node in nodes]
         if nodes_list:
             nodes_list.sort(key=lambda k: k.location.x)
-            xloc = nodes_list[0].location.x - 220  # place new nodes at far left
+            xloc = nodes_list[0].location.x - 220 - (320 if addshader else 0) # place new nodes at far left with enough space for new nodes
             yloc = 0
             for node in nodes:
                 node.select = False
@@ -246,6 +275,8 @@ class NSAddMultipleImages(Operator):
         else:
             xloc = 0
             yloc = 0
+
+        orgx, orgy = xloc,yloc
 
         if context.space_data.node_tree.type == 'SHADER':
             node_type = "ShaderNodeTexImage"
@@ -384,7 +415,40 @@ class NSAddMultipleImages(Operator):
         for node in new_nodes:
             node.parent = frm
 
-        #print(context.area.type)
+        if addshader:
+            # add a normal map node
+            normalmap = nodes.new("ShaderNodeNormalMap")
+            normalmap.hide = True
+            normalmap.width_hidden = 80
+
+            bsdf = None
+            # add a principled shader (this only works for Blender 2.79 or some daily builds
+            try:
+                bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+                bsdf.hide = False
+                bsdf.width_hidden = 100
+                bsdf.location.x = orgx + 360
+                bsdf.location.y = orgy + 162
+            except: # yes I know it is bad form not to be specific
+                pass
+
+            normaltex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_normal))
+            if normaltex:
+                link_nodes(context.space_data.node_tree,normaltex,"Color",normalmap,"Color")
+                normalmap.location.x = orgx + 182
+                normalmap.location.y = orgy - 42
+                link_nodes(context.space_data.node_tree,normalmap,"Normal",bsdf,"Normal")
+            if bsdf:
+                metaltex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_metallic))
+                if metaltex:
+                    link_nodes(context.space_data.node_tree,metaltex,"Color",bsdf,"Metallic")
+                roughnesstex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_roughness))
+                if roughnesstex:
+                    link_nodes(context.space_data.node_tree,roughnesstex,"Color",bsdf,"Roughness")
+                colortex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_color))
+                if colortex:
+                    link_nodes(context.space_data.node_tree,colortex,"Color",bsdf,"Base Color")  # note the space in the name
+
         context.area.tag_redraw() # this in itself is not enough to trigger a redraw...
 
         bpy.ops.node.view_all()
@@ -394,7 +458,10 @@ class NSAddMultipleImages(Operator):
 
 def multipleimages_menu_func(self, context):
     col = self.layout.column(align=True)
-    col.operator(NSAddMultipleImages.bl_idname, text="Set of images")
+    op = col.operator(NSAddMultipleImages.bl_idname, text="Set of images")
+    op.shader = False
+    op = col.operator(NSAddMultipleImages.bl_idname, text="Set of images + shader")
+    op.shader = True
     col.separator()
 
 
