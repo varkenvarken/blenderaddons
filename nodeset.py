@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Nodeset",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201706251223),
+    "version": (0, 0, 201707011445),
     "blender": (2, 78, 4),  # needs support for Principled shader to work
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -131,6 +131,11 @@ class NodeSet(bpy.types.AddonPreferences):
         default=True,
         description="Link to texture if textures already present in scene")
 
+    use_objectspace = BoolProperty(
+        name="Use object space",
+        default=False,
+        description="use object space instead of tangent space for normal map nodes")
+        
     def draw(self, context):
         layout = self.layout
         col = layout.column()
@@ -152,7 +157,9 @@ class NodeSet(bpy.types.AddonPreferences):
             col.prop(self, "filter_fragment")
         col.label(" ")
         col.prop(self, "extensions")
-        col.prop(self, "link_if_exist")
+        row = col.row()
+        row.prop(self, "link_if_exist")
+        row.prop(self, "use_objectspace")
         col.prop(self, "frame_color")
 
 # from node wrangler
@@ -361,18 +368,21 @@ class NSAddMultipleImages(Operator):
                     for ext in settings.extensions.split(','):
                         fname = prefix + k + '.' + ext.strip()
 
+                        #print('checking ',fname)
                         if settings.case_sensitive:
                             if fname not in files:
-                                break
+                                #print('case sensitive, NOT FOUND')
+                                continue
                         else:
                             if fname.lower() not in fileslower:
-                                break
+                                #print('case INsensitive, NOT FOUND')
+                                continue
                             for f in files:
                                 if fname.lower() == f.lower():
                                     fname = f
                                     break
 
-                        #print('looking for ',fname)
+                        #print('loading for ',fname)
                         try:
                             img = bpy.data.images.load(self.directory+fname,settings.link_if_exist)
 
@@ -420,6 +430,12 @@ class NSAddMultipleImages(Operator):
             normalmap = nodes.new("ShaderNodeNormalMap")
             normalmap.hide = True
             normalmap.width_hidden = 80
+            # using tangent space or object space is somewhat a matter of taste but because
+            # tangent space normal maps together witj the experimental microdisplacement 
+            # results in an all black material I prefer this option to be on by default.
+            # see https://developer.blender.org/T49159
+            if settings.use_objectspace:
+                normalmap.space = 'OBJECT'
 
             bsdf = None
             # add a principled shader (this only works for Blender 2.79 or some daily builds
