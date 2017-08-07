@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  Snap and transform, a Blender addon
+#  Edit mode origin tools, a Blender addon
 #  (c) 2017 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
@@ -20,24 +20,25 @@
 # ##### END GPL LICENSE BLOCK #####
 
 import bpy
+import numpy as np
 
 bl_info = {
-	"name": "Snap and transform",
+	"name": "Edit mode origin tools",
 	"author": "michel anders (varkenvarken)",
 	"version": (0, 0, 201708071053),
 	"blender": (2, 78, 0),
-	"location": "View3D > Mesh > Snap > Snap and transform",
-	"description": "Snap cursor to selected geometry and move origin to same position",
+	"location": "View3D > Mesh > Snap",
+	"description": "Move origin to selected geometry and to lowest point in mesh",
 	"warning": "",
 	"wiki_url": "http://blenderthings.blogspot.com/",
 	"tracker_url": "",
 	"category": "Mesh"}
 
 
-class SnapAndTransform(bpy.types.Operator):
-
-	bl_idname = "mesh.select_and_transform"
-	bl_label = "SnapAndTransform"
+class OriginToSelected(bpy.types.Operator):
+	'''Move origin to selected geometry'''
+	bl_idname = "mesh.editmode_origin_to_selected"
+	bl_label = "OriginToSelected"
 	bl_description = "Snap cursor to selected geometry and move origin to same position"
 	bl_options = {'REGISTER', 'UNDO'}
 
@@ -55,10 +56,45 @@ class SnapAndTransform(bpy.types.Operator):
 		bpy.ops.object.editmode_toggle()
 		return {'FINISHED'}
 
+class OriginToLowest(bpy.types.Operator):
+	'''Move origin to lowest point in mesh'''
+	bl_idname = "mesh.editmode_origin_to_lowest"
+	bl_label = "OriginToLowest"
+	bl_description = "Snap cursor to lowest point in geometry and move origin to same position"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	@classmethod
+	def poll(self, context):
+		return (context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH')
+
+	def execute(self, context):
+		bpy.ops.object.editmode_toggle()
+		me = context.active_object.data
+		count = len(me.vertices)
+		if count > 0:  # degenerate mesh, but better safe than sorry
+			# get the vertex coords
+			shape = (count, 3)
+			verts = np.empty(count*3, dtype=np.float32)
+			me.vertices.foreach_get('co', verts)
+			verts.shape = shape
+			# add a w coord of 1 by copying xyz over a xyzw array of all ones, because world matrix is 4x4
+			verts2 = np.ones((count,4))
+			verts2[:,:3] = verts
+			# multiply with world matrix to get world coords
+			M = np.array(context.active_object.matrix_world, dtype=np.float32)
+			verts = (M @ verts2.T).T[:,:3]  # remember @ is the new python matrix multiplicator that numpy supports the double transpose is to get the 4 x 1 vectors to 1 x 4
+			# get coords of vertex with lowest z value
+			min_co = verts[np.argsort(verts[:,2])[0]]
+			context.scene.cursor_location = min_co
+			bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+		bpy.ops.object.editmode_toggle()
+		return {'FINISHED'}
+
 
 def menu_func(self, context):
 	self.layout.separator()
-	self.layout.operator(SnapAndTransform.bl_idname, text="Snap and transform")
+	self.layout.operator(OriginToSelected.bl_idname, text="Origin to selected")
+	self.layout.operator(OriginToLowest.bl_idname, text="Origin to lowest vertex (along z-axis)")
 
 
 def register():
