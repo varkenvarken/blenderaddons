@@ -17,9 +17,9 @@
 # ##### END GPL LICENSE BLOCK #####
 
 bl_info = {
-    "name": "Nodeset",
-    "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201707011445),
+    "name": "NodeSet",
+    "author": "Michel Anders (varkenvarken), with additional functionality suggested by monari",
+    "version": (0, 0, 201708261704),
     "blender": (2, 78, 4),  # needs support for Principled shader to work
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -45,122 +45,132 @@ class NodeSet(bpy.types.AddonPreferences):
     suffix_color = StringProperty(
         name="Color Suffix",
         default='_BaseColor',
-        description="Suffix that identifies the base color map")
-
-    suffix_height = StringProperty(
-        name="Height Suffix",
-        default='_Height',
-        description="Suffix that identifies the height map")
-
-    suffix_metallic = StringProperty(
-        name="Metallic Suffix",
-        default='_Metallic',
-        description="Suffix that identifies the metallic map")
-
-    suffix_normal = StringProperty(
-        name="Normal Suffix",
-        default='_Normal',
-        description="Suffix that identifies the normal map")
+        description="Suffix that identifies the Base Color Map")
 
     suffix_roughness = StringProperty(
         name="Roughness Suffix",
         default='_Roughness',
-        description="Suffix that identifies the roughness map")
+        description="Suffix that identifies the Roughness Map")
 
-    suffix_diffuse = StringProperty(
-        name="Diffuse Suffix",
-        default='_Diffuse',
-        description="Suffix that identifies the diffuse map")
+    suffix_metallic = StringProperty(
+        name="Metallic Suffix",
+        default='_Metallic',
+        description="Suffix that identifies the Metallic Map")
 
-    suffix_glossiness = StringProperty(
-        name="Glossiness Suffix",
-        default='_Glossiness',
-        description="Suffix that identifies the glossiness map")
+    suffix_normal = StringProperty(
+        name="Normal Suffix",
+        default='_Normal',
+        description="Suffix that identifies the Normal Map")
 
-    suffix_specular = StringProperty(
-        name="Specular Suffix",
-        default='_Specular',
-        description="Suffix that identifies the specular map")
-
-
-    suffix_opacity = StringProperty(
-        name="Opacity Suffix",
-        default='_Opacity',
-        description="Suffix that identifies the opacity map")
+    suffix_height = StringProperty(
+        name="Height Suffix",
+        default='_Height',
+        description="Suffix that identifies the Height Map")
 
     suffix_emission = StringProperty(
         name="Emission Suffix",
         default='_Emissive',
-        description="Suffix that identifies the emission map")
+        description="Suffix that identifies the Emission Map")        
+
+    suffix_diffuse = StringProperty(
+        name="Diffuse Suffix",
+        default='_Diffuse',
+        description="Suffix that identifies the Diffuse Map")
+
+    suffix_specular = StringProperty(
+        name="Specular Suffix",
+        default='_Specular',
+        description="Suffix that identifies the Specular Map")
+
+    suffix_glossiness = StringProperty(
+        name="Glossiness Suffix",
+        default='_Glossiness',
+        description="Suffix that identifies the Glossiness Map")    
+
+    suffix_opacity = StringProperty(
+        name="Opacity Suffix",
+        default='_Opacity',
+        description="Suffix that identifies the Opacity Map")    
 
     suffix_ao = StringProperty(
         name="AO Suffix",
         default='_ambient_occlusion',
-        description="Suffix that identifies the ao map")
-
-    extensions = StringProperty(
-        name="Extensions",
-        default='png,jpg,jpeg,exr,hdr',
-        description="Comma separated list of extensions to try when looking for matching texture files")
-
-    frame_color = FloatVectorProperty(
-        name="Frame color",
-        description="The color of the frame node",
-        default=(0.6, 0.6, 0.6),
-        min=0, max=1, step=1, precision=3,
-        subtype='COLOR_GAMMA',
-        size=3)
-
-    filter_fragment = StringProperty(
-        name="Filter fragment",
-        default='Color',
-        description="Name fragment to use when filtering list of textures")
+        description="Suffix that identifies the Ambient Occlusion Map")
 
     case_sensitive = BoolProperty(
-        name="Case sensitive",
+        name="Case Sensitive",
         default=False,
         description="Case sensitivity of suffix matching")
 
-    filter_to_color = BoolProperty(
-        name="Filter",
-        default=True,
-        description="Limit list of textures in file selector files containing Filter fragment")
-
     link_if_exist = BoolProperty(
-        name="Link existing",
+        name="Link Existing Tex Files",
         default=True,
-        description="Link to texture if textures already present in scene")
+        description="Link to texture files, if it's already exist in the Scene")
 
     use_objectspace = BoolProperty(
-        name="Use object space",
+        name="Object Space in Normal Map",
         default=False,
-        description="use object space instead of tangent space for normal map nodes")
+        description="Use Object Space instead of Tangent Space for Normal Map Node")
+
+    filter_to_color = BoolProperty(
+        name="Filter Visibility of Bitmaps in File Browser",
+        default=True,
+        description="Limit visibility of texture files by wildcard")    
+
+    filter_fragment = StringProperty(
+        name="Wildcard (Keyword)",
+        default='Color',
+        description="Keyword to use, for filtering long list of files")
+
+    extensions = StringProperty(
+        name="File Extensions Support",
+        default='png, jpeg, targa, tiff, exr, hdr',
+        description="Comma separated list of extensions for file search")
+
+    frame_color = FloatVectorProperty(
+        name = "Frame Node Color",
+        description = "Background color of the Frame Node",
+        default = (0.6, 0.6, 0.6),
+        min = 0, max = 1, step = 1, precision = 3,
+        subtype = 'COLOR_GAMMA',
+        size = 3)    
+
         
     def draw(self, context):
         layout = self.layout
         col = layout.column()
-        col.prop(self, "suffix_color")
-        col.prop(self, "suffix_diffuse")
-        col.prop(self, "suffix_emission")
-        col.prop(self, "suffix_glossiness")
-        col.prop(self, "suffix_height")
-        col.prop(self, "suffix_metallic")
-        col.prop(self, "suffix_normal")
-        col.prop(self, "suffix_opacity")
-        col.prop(self, "suffix_roughness")
-        col.prop(self, "suffix_specular")
-        col.prop(self, "suffix_ao")
-        col.prop(self, "case_sensitive")
-        col.label(" ")
-        col.prop(self, "filter_to_color")
-        if self.filter_to_color:
-            col.prop(self, "filter_fragment")
-        col.label(" ")
-        col.prop(self, "extensions")
+        box = col.box()
+        box.label("PBR-Metal-Rough Workflow")
+        box.prop(self, "suffix_color")
+        box.prop(self, "suffix_roughness")
+        box.prop(self, "suffix_metallic")
+        box = col.box()
+        box.label("PBR-Spec-Gloss Workflow")
+        box.prop(self, "suffix_diffuse")
+        box.prop(self, "suffix_specular")        
+        box.prop(self, "suffix_glossiness")
+        box = col.box()
+        box.label("Common Workflow")
+        box.prop(self, "suffix_normal")
+        box.prop(self, "suffix_height")
+        box = col.box()
+        box.label("Additional Textures")                
+        box.prop(self, "suffix_emission")        
+        box.prop(self, "suffix_opacity")        
+        box.prop(self, "suffix_ao")
+        col.separator()
         row = col.row()
+        row.prop(self, "case_sensitive")
         row.prop(self, "link_if_exist")
-        row.prop(self, "use_objectspace")
-        col.prop(self, "frame_color")
+        row.prop(self, "use_objectspace")        
+        row = col.row()
+        row.prop(self, "filter_to_color")
+        if self.filter_to_color:
+            row.prop(self, "filter_fragment")        
+        col.prop(self, "extensions")
+        col.separator()
+        row = col.row()        
+        row.prop(self, "frame_color")
 
 # from node wrangler
 def node_mid_pt(node, axis):
@@ -208,15 +218,21 @@ def sanitize(s):
 
 # the node placement stuff at the start of execute() is from node wrangler
 class NSAddMultipleImages(Operator):
-    """Add a collection of textures with a common naming convention"""
+    """Add a collection of textures"""
     bl_idname = 'node.ns_add_multiple_images'
-    bl_label = 'Open a set of images'
+    bl_label = 'Import Texture set'
     bl_options = {'REGISTER', 'UNDO'}
 
     shader = BoolProperty(
-        name="Add shader",
+        name="Add Shader",
         default=False,
-        description="Add principled shader and Normal map node")
+        description="Add Principled BSDF, Normal Map and Bump Node")
+
+    displacement= BoolProperty(
+        name="Displacement",
+        default=False,
+        description="Connect height map to displacment socket")
+
 
     directory = StringProperty(subtype="DIR_PATH")
 
@@ -268,12 +284,14 @@ class NSAddMultipleImages(Operator):
         if nodes is None:
             return {'FINISHED'}
 
+        # only add and connect shaders when we're not inside a node group
         addshader = (context.space_data.node_tree.type == 'SHADER' and self.shader)
+        connectdisp  = (context.space_data.node_tree.type == 'SHADER' and self.displacement)
 
         nodes_list = [node for node in nodes]
         if nodes_list:
             nodes_list.sort(key=lambda k: k.location.x)
-            xloc = nodes_list[0].location.x - 220 - (320 if addshader else 0) # place new nodes at far left with enough space for new nodes
+            xloc = nodes_list[0].location.x - 220 - (700 if addshader else 0) # place new nodes at far left with enough space for new nodes
             yloc = 0
             for node in nodes:
                 node.select = False
@@ -283,7 +301,7 @@ class NSAddMultipleImages(Operator):
             xloc = 0
             yloc = 0
 
-        orgx, orgy = xloc,yloc
+        orgx, orgy = xloc, yloc
 
         if context.space_data.node_tree.type == 'SHADER':
             node_type = "ShaderNodeTexImage"
@@ -329,7 +347,7 @@ class NSAddMultipleImages(Operator):
         new_nodes = []
         prefix = None
         ext = None
-        # first we get all explicitely selected files ...
+        # first we get all explicitely selected files and decide, which bitmaps needs to be a color data
         for f in self.files:
             fname = f.name
             basename = path.basename(path.splitext(fname)[0])
@@ -338,8 +356,8 @@ class NSAddMultipleImages(Operator):
             node = nodes.new(node_type)
             new_nodes.append(node)
             node.label = fname
-            node.hide = True
-            node.width_hidden = 100
+            node.hide = True            
+            node.width_hidden = 50
             node.location.x = xloc
             node.location.y = yloc
             yloc -= 40
@@ -389,8 +407,8 @@ class NSAddMultipleImages(Operator):
                             node = nodes.new(node_type)
                             new_nodes.append(node)
                             node.label = sanitize(k)
-                            node.hide = True
-                            node.width_hidden = 100
+                            node.hide = True                            
+                            node.width_hidden = 50
                             node.location.x = xloc
                             node.location.y = yloc
                             yloc -= 40
@@ -417,55 +435,91 @@ class NSAddMultipleImages(Operator):
         # add the new nodes to a frame
         bpy.ops.node.add_node(type='NodeFrame')
         frm = nodes.active
-        frm.label = path.basename(prefix if prefix else 'Material')
-        frm.label_size = 14  # the default of 20 will extend the shrink to fit area! bug?
+        frm.label = path.basename(prefix if prefix else 'Material') + "Texture Set"
+        frm.label_size = 13  # the default of 20 will extend the shrink to fit area! bug?
         frm.use_custom_color = True
         frm.color = settings.frame_color
 
         for node in new_nodes:
             node.parent = frm
 
-        if addshader:
+        if addshader:  #If we choose "SP Bitmaps -> PBR" option
             # add a normal map node
             normalmap = nodes.new("ShaderNodeNormalMap")
-            normalmap.hide = True
-            normalmap.width_hidden = 80
+            normalmap.hide = False
+            normalmap.width_hidden = 50
+            normalmap.location.x = orgx + 250
+            normalmap.location.y = orgy - 100
             # using tangent space or object space is somewhat a matter of taste but because
-            # tangent space normal maps together witj the experimental microdisplacement 
+            # tangent space normal maps together wit the experimental microdisplacement 
             # results in an all black material I prefer this option to be on by default.
             # see https://developer.blender.org/T49159
             if settings.use_objectspace:
                 normalmap.space = 'OBJECT'
 
-            bsdf = None
+            if not connectdisp:
+                # add a bump node
+                bump_node = nodes.new("ShaderNodeBump")
+                bump_node.hide = False
+                bump_node.width_hidden = 100
+                bump_node.location.x = orgx + 450
+                bump_node.location.y = orgy - 100
+            else:
+                # add a math node to attenuate the displacement
+                math_node = nodes.new("ShaderNodeMath")
+                math_node.operation = 'MULTIPLY'
+                math_node.hide = False
+                math_node.width_hidden = 100
+                math_node.location.x = orgx + 250
+                math_node.location.y = orgy + 100
+
+            pbr_bsdf = None
             # add a principled shader (this only works for Blender 2.79 or some daily builds
             try:
-                bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-                bsdf.hide = False
-                bsdf.width_hidden = 100
-                bsdf.location.x = orgx + 360
-                bsdf.location.y = orgy + 162
+                pbr_bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+                #pbr_bsdf.hide = False
+                pbr_bsdf.width = 205
+                pbr_bsdf.location.x = orgx + 650
+                pbr_bsdf.location.y = orgy + 162
             except: # yes I know it is bad form not to be specific
                 pass
+
+            if pbr_bsdf:
+                colortex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_color))
+                if colortex:
+                    link_nodes(context.space_data.node_tree,colortex,"Color",pbr_bsdf,"Base Color") # note the space in the name
+                metaltex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_metallic))
+                if metaltex:
+                    link_nodes(context.space_data.node_tree,metaltex,"Color",pbr_bsdf,"Metallic")
+                roughnesstex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_roughness))
+                if roughnesstex:
+                    link_nodes(context.space_data.node_tree,roughnesstex,"Color",pbr_bsdf,"Roughness")
 
             normaltex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_normal))
             if normaltex:
                 link_nodes(context.space_data.node_tree,normaltex,"Color",normalmap,"Color")
-                normalmap.location.x = orgx + 182
-                normalmap.location.y = orgy - 42
-                link_nodes(context.space_data.node_tree,normalmap,"Normal",bsdf,"Normal")
-            if bsdf:
-                metaltex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_metallic))
-                if metaltex:
-                    link_nodes(context.space_data.node_tree,metaltex,"Color",bsdf,"Metallic")
-                roughnesstex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_roughness))
-                if roughnesstex:
-                    link_nodes(context.space_data.node_tree,roughnesstex,"Color",bsdf,"Roughness")
-                colortex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_color))
-                if colortex:
-                    link_nodes(context.space_data.node_tree,colortex,"Color",bsdf,"Base Color")  # note the space in the name
+                if not connectdisp:
+                    link_nodes(context.space_data.node_tree,normalmap,"Normal",bump_node,"Normal")
+                    link_nodes(context.space_data.node_tree,bump_node,"Normal",pbr_bsdf,"Normal")
+                else:
+                    link_nodes(context.space_data.node_tree,normalmap,"Normal",pbr_bsdf,"Normal")
+            
+            heighttex = NSAddMultipleImages.find_in_nodes(new_nodes, sanitize(settings.suffix_height))
+            if heighttex:
+                if not connectdisp:
+                    link_nodes(context.space_data.node_tree,heighttex,"Color",bump_node,"Height")
 
+            mat_output = nodes.get("Material Output")
+            if mat_output:
+                link_nodes(context.space_data.node_tree, pbr_bsdf, "BSDF", mat_output, "Surface")
+                if connectdisp and heighttex:
+                    link_nodes(context.space_data.node_tree, heighttex, "Color", math_node, "Value")
+                    link_nodes(context.space_data.node_tree, math_node, "Value", mat_output, "Displacement")
+
+            
         context.area.tag_redraw() # this in itself is not enough to trigger a redraw...
+        
+        context.region.tag_redraw()
 
         bpy.ops.node.view_all()
 
@@ -474,9 +528,9 @@ class NSAddMultipleImages(Operator):
 
 def multipleimages_menu_func(self, context):
     col = self.layout.column(align=True)
-    op = col.operator(NSAddMultipleImages.bl_idname, text="Set of images")
+    op = col.operator(NSAddMultipleImages.bl_idname, text="Image Texture Set")
     op.shader = False
-    op = col.operator(NSAddMultipleImages.bl_idname, text="Set of images + shader")
+    op = col.operator(NSAddMultipleImages.bl_idname, text="Image Texture Set + Principled BSDF")
     op.shader = True
     col.separator()
 
