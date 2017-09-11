@@ -22,13 +22,13 @@
 bl_info = {
 	"name": "ColorRampPicker",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201612141430),
+	"version": (0, 0, 201709111457),
 	"blender": (2, 78, 0),
 	"location": "Node Editor > Node > Color Ramp Picker",
 	"description": "set a range of color setpoints in a selected color ramp by dragging the cursor over a sample area",
 	"warning": "",
-	"wiki_url": "https://cgcookiemarkets.com/vendor/varkenvarken/",
-	"tracker_url": "https://cgcookiemarkets.com/vendor/varkenvarken/",
+	"wiki_url": "https://github.com/varkenvarken/blenderaddons",
+	"tracker_url": "",
 	"category": "Node"}
 
 import bpy
@@ -41,9 +41,12 @@ class ColorRampPicker(bpy.types.Operator):
 
 	@classmethod
 	def poll(self, context):  # only visible if we have a color ramp node selected
+		space = context.space_data
+		tree = space.node_tree
 		return (context.space_data.type == 'NODE_EDITOR' 
-			and context.active_object.active_material.use_nodes
-			and context.active_object.active_material.node_tree.nodes.active.type == 'VALTORGB')
+				and tree
+				and tree.nodes.active
+				and tree.nodes.active.type == 'VALTORGB')
 
 	def modal(self, context, event):
 		context.area.tag_redraw()
@@ -68,7 +71,7 @@ class ColorRampPicker(bpy.types.Operator):
 				buf = bgl.Buffer(bgl.GL_FLOAT, [1, 3])
 				if len(self.mouse_path) == 1:
 					self.mouse_path.append(self.mouse_path[0])
-				elements = context.active_object.active_material.node_tree.nodes.active.color_ramp.elements
+				elements = context.space_data.node_tree.nodes.active.color_ramp.elements
 				# remove all elements (setpoints). Last one cannot be removed
 				while len(elements) > 1:
 					elements.remove(elements[0])
@@ -107,17 +110,17 @@ class ColorRampPicker(bpy.types.Operator):
 
 		self.cursor_set = False
 		if context.space_data.type == 'NODE_EDITOR':
-			if context.active_object.active_material.use_nodes:
-				node = context.active_object.active_material.node_tree.nodes.active
-				if node and node.type == 'VALTORGB':
-					args = (self, context)
-					self.mouse_path = []
-					context.window_manager.modal_handler_add(self)
-					context.window.cursor_modal_set('EYEDROPPER')
-					self.cursor_set = True
-					self.record = False
-					context.area.tag_redraw()
-					return {'RUNNING_MODAL'}
+			tree = context.space_data.node_tree
+			node = tree.nodes.active
+			if node and node.type == 'VALTORGB':
+				args = (self, context)
+				self.mouse_path = []
+				context.window_manager.modal_handler_add(self)
+				context.window.cursor_modal_set('EYEDROPPER')
+				self.cursor_set = True
+				self.record = False
+				context.area.tag_redraw()
+				return {'RUNNING_MODAL'}
 		return {'CANCELLED'}
 
 def menu_func_vcol(self, context):
