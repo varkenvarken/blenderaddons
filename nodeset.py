@@ -19,7 +19,7 @@
 bl_info = {
     "name": "NodeSet",
     "author": "Michel Anders (varkenvarken), with additional functionality suggested by monari",
-    "version": (0, 0, 201708261704),
+    "version": (0, 0, 201712020811),
     "blender": (2, 78, 4),  # needs support for Principled shader to work
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -124,7 +124,7 @@ class NodeSet(bpy.types.AddonPreferences):
 
     extensions = StringProperty(
         name="File Extensions Support",
-        default='png, jpeg, targa, tiff, exr, hdr',
+        default='png, jpg, jpeg, targa, tiff, exr, hdr',
         description="Comma separated list of extensions for file search")
 
     frame_color = FloatVectorProperty(
