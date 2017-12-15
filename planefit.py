@@ -21,7 +21,7 @@
 bl_info = {
     "name": "PlaneFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201712101438),
+    "version": (0, 0, 201712151952),
     "blender": (2, 79, 0),
     "location": "Edit mode 3d-view, Add-->PlaneFit",
     "description": "Add a plane that best fits a collection of selected vertices",
@@ -73,28 +73,30 @@ class PlaneFit(bpy.types.Operator):
 			me.vertices.foreach_get('co', verts)
 			me.vertices.foreach_get('select', selected)
 			verts.shape = shape
-			ctr, normal = planeFit(verts[selected])  # actually we should check if there are at least 3 points selected
-			dx, dy = orthopoints(normal)
-			# can't use mesh.from_pydata here because that won't let us ADD to a mesh
-			me.vertices.add(4)
-			me.vertices[count  ].co = ctr+dx*self.size
-			me.vertices[count+1].co = ctr+dy*self.size
-			me.vertices[count+2].co = ctr-dx*self.size
-			me.vertices[count+3].co = ctr-dy*self.size
-			lcount = len(me.loops)
-			me.loops.add(4)
-			pcount = len(me.polygons)
-			me.polygons.add(1)
-			me.polygons[pcount].loop_total = 4
-			me.polygons[pcount].loop_start = lcount
-			me.polygons[pcount].vertices = [count,count+1,count+2,count+3]
-			me.update(calc_edges=True)
-
+			if np.count_nonzero(selected) >= 3 :
+				ctr, normal = planeFit(verts[selected])
+				dx, dy = orthopoints(normal)
+				# can't use mesh.from_pydata here because that won't let us ADD to a mesh
+				me.vertices.add(4)
+				me.vertices[count  ].co = ctr+dx*self.size
+				me.vertices[count+1].co = ctr+dy*self.size
+				me.vertices[count+2].co = ctr-dx*self.size
+				me.vertices[count+3].co = ctr-dy*self.size
+				lcount = len(me.loops)
+				me.loops.add(4)
+				pcount = len(me.polygons)
+				me.polygons.add(1)
+				me.polygons[pcount].loop_total = 4
+				me.polygons[pcount].loop_start = lcount
+				me.polygons[pcount].vertices = [count,count+1,count+2,count+3]
+				me.update(calc_edges=True)
+			else:
+				self.report({'WARNING'}, "Need at least 3 selected vertices to fit a plane through")
 		bpy.ops.object.editmode_toggle()
 		return {'FINISHED'}
 
 def menu_func(self, context):
-	self.layout.operator(PlaneFit.bl_idname, text=bl_info['description'],
+	self.layout.operator(PlaneFit.bl_idname, text="Fit plane to selected",
 						icon='PLUGIN')
 
 def register():
