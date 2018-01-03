@@ -19,7 +19,7 @@
 bl_info = {
     "name": "NodeSet",
     "author": "Michel Anders (varkenvarken), with additional functionality suggested by monari",
-    "version": (0, 0, 201712020811),
+    "version": (0, 0, 201801031529),
     "blender": (2, 78, 4),  # needs support for Principled shader to work
     "location": "Node Editor -> Add",
     "description": "Add a set of images and configure texture nodes based on names",
@@ -465,13 +465,19 @@ class NSAddMultipleImages(Operator):
                 bump_node.location.x = orgx + 450
                 bump_node.location.y = orgy - 100
             else:
-                # add a math node to attenuate the displacement
+                # add math nodes to attenuate the displacement and correct the offset
                 math_node = nodes.new("ShaderNodeMath")
                 math_node.operation = 'MULTIPLY'
                 math_node.hide = False
                 math_node.width_hidden = 100
-                math_node.location.x = orgx + 250
+                math_node.location.x = orgx + 410
                 math_node.location.y = orgy + 100
+                math_node2 = nodes.new("ShaderNodeMath")
+                math_node2.operation = 'SUBTRACT'
+                math_node2.hide = False
+                math_node2.width_hidden = 100
+                math_node2.location.x = orgx + 250
+                math_node2.location.y = orgy + 100
 
             pbr_bsdf = None
             # add a principled shader (this only works for Blender 2.79 or some daily builds
@@ -513,7 +519,8 @@ class NSAddMultipleImages(Operator):
             if mat_output:
                 link_nodes(context.space_data.node_tree, pbr_bsdf, "BSDF", mat_output, "Surface")
                 if connectdisp and heighttex:
-                    link_nodes(context.space_data.node_tree, heighttex, "Color", math_node, "Value")
+                    link_nodes(context.space_data.node_tree, heighttex, "Color", math_node2, "Value")
+                    link_nodes(context.space_data.node_tree, math_node2, "Value", math_node, "Value")
                     link_nodes(context.space_data.node_tree, math_node, "Value", mat_output, "Displacement")
 
             
