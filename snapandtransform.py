@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Edit mode origin tools, a Blender addon
-#  (c) 2017 Michel J. Anders (varkenvarken)
+#  (c) 2017,2018 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -21,12 +21,13 @@
 
 import bpy
 import numpy as np
+from bpy.props import BoolProperty
 
 bl_info = {
 	"name": "Edit mode origin tools",
 	"author": "michel anders (varkenvarken)",
-	"version": (0, 0, 201708071053),
-	"blender": (2, 78, 0),
+	"version": (0, 0, 201803310907),
+	"blender": (2, 79, 0),
 	"location": "View3D > Mesh > Snap",
 	"description": "Move origin to selected geometry and to lowest point in mesh",
 	"warning": "",
@@ -60,15 +61,18 @@ class OriginToLowest(bpy.types.Operator):
 	'''Move origin to lowest point in mesh'''
 	bl_idname = "mesh.editmode_origin_to_lowest"
 	bl_label = "OriginToLowest"
-	bl_description = "Snap cursor to lowest point in geometry and move origin to same position"
+	bl_description = "Move the origin to lowest point"
 	bl_options = {'REGISTER', 'UNDO'}
+
+	center = BoolProperty(name='Center', default=True, description='lowest on z-axis but also centered below the center')
 
 	@classmethod
 	def poll(self, context):
-		return (context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH')
+		return ((context.mode == 'EDIT_MESH' or context.mode == 'OBJECT' )and context.active_object.type == 'MESH')
 
 	def execute(self, context):
-		bpy.ops.object.editmode_toggle()
+		if context.mode == 'EDIT_MESH':
+			bpy.ops.object.editmode_toggle()
 		me = context.active_object.data
 		count = len(me.vertices)
 		if count > 0:  # degenerate mesh, but better safe than sorry
@@ -85,16 +89,24 @@ class OriginToLowest(bpy.types.Operator):
 			verts = (M @ verts2.T).T[:,:3]  # remember @ is the new python matrix multiplicator that numpy supports the double transpose is to get the 4 x 1 vectors to 1 x 4
 			# get coords of vertex with lowest z value
 			min_co = verts[np.argsort(verts[:,2])[0]]
+			# replace x,y coordinates by center coords if selected
+			if self.center:
+				# get the center of all the transformed vertices
+				center = np.average(verts, axis=0)
+				# replace the x,y coords
+				min_co[0:2] = center[0:2]
 			context.scene.cursor_location = min_co
 			bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
-		bpy.ops.object.editmode_toggle()
+		if context.mode == 'EDIT_MESH':
+			bpy.ops.object.editmode_toggle()
 		return {'FINISHED'}
 
 
 def menu_func(self, context):
 	self.layout.separator()
 	self.layout.operator(OriginToSelected.bl_idname, text="Origin to selected")
-	self.layout.operator(OriginToLowest.bl_idname, text="Origin to lowest vertex (along z-axis)")
+	self.layout.operator(OriginToLowest.bl_idname, text="Origin to lowest point (World Z-axis)").center = False
+	self.layout.operator(OriginToLowest.bl_idname, text="Origin to lowest point (World Z-axis, centered)").center = True
 
 
 def register():
