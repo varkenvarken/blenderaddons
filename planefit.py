@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  PLaneFit, (c) 2017 Michel Anders (varkenvarken)
+#  PLaneFit, (c) 2017,2018 Michel Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -21,7 +21,7 @@
 bl_info = {
     "name": "PlaneFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201712151952),
+    "version": (0, 0, 201805050933),
     "blender": (2, 79, 0),
     "location": "Edit mode 3d-view, Add-->PlaneFit",
     "description": "Add a plane that best fits a collection of selected vertices",
@@ -57,6 +57,7 @@ class PlaneFit(bpy.types.Operator):
 	bl_options = {'REGISTER', 'UNDO'}
 
 	size = bpy.props.FloatProperty(name="Size", description="Size of the plane", default=1, min=0, soft_max=10)
+	separate = bpy.props.BoolProperty(name="Separate", description="Generate the plane as a separate object", default=False)
 
 	@classmethod
 	def poll(self, context):
@@ -64,7 +65,8 @@ class PlaneFit(bpy.types.Operator):
 
 	def execute(self, context):
 		bpy.ops.object.editmode_toggle()
-		me = context.active_object.data
+		ob = context.active_object
+		me = ob.data
 		count = len(me.vertices)
 		if count > 0:  # degenerate mesh, but better safe than sorry
 			shape = (count, 3)
@@ -76,20 +78,27 @@ class PlaneFit(bpy.types.Operator):
 			if np.count_nonzero(selected) >= 3 :
 				ctr, normal = planeFit(verts[selected])
 				dx, dy = orthopoints(normal)
-				# can't use mesh.from_pydata here because that won't let us ADD to a mesh
-				me.vertices.add(4)
-				me.vertices[count  ].co = ctr+dx*self.size
-				me.vertices[count+1].co = ctr+dy*self.size
-				me.vertices[count+2].co = ctr-dx*self.size
-				me.vertices[count+3].co = ctr-dy*self.size
-				lcount = len(me.loops)
-				me.loops.add(4)
-				pcount = len(me.polygons)
-				me.polygons.add(1)
-				me.polygons[pcount].loop_total = 4
-				me.polygons[pcount].loop_start = lcount
-				me.polygons[pcount].vertices = [count,count+1,count+2,count+3]
-				me.update(calc_edges=True)
+				if self.separate:
+					bpy.ops.mesh.primitive_plane_add(location = ob.location)
+					me = context.active_object.data
+					for vi,co in zip(me.polygons[0].vertices, [ctr+dx*self.size, ctr+dy*self.size, ctr-dx*self.size, ctr-dy*self.size]):
+						me.vertices[vi].co = co
+					context.scene.objects.active = ob
+				else:
+					# can't use mesh.from_pydata here because that won't let us ADD to a mesh
+					me.vertices.add(4)
+					me.vertices[count  ].co = ctr+dx*self.size
+					me.vertices[count+1].co = ctr+dy*self.size
+					me.vertices[count+2].co = ctr-dx*self.size
+					me.vertices[count+3].co = ctr-dy*self.size
+					lcount = len(me.loops)
+					me.loops.add(4)
+					pcount = len(me.polygons)
+					me.polygons.add(1)
+					me.polygons[pcount].loop_total = 4
+					me.polygons[pcount].loop_start = lcount
+					me.polygons[pcount].vertices = [count,count+1,count+2,count+3]
+					me.update(calc_edges=True)
 			else:
 				self.report({'WARNING'}, "Need at least 3 selected vertices to fit a plane through")
 		bpy.ops.object.editmode_toggle()
@@ -98,6 +107,8 @@ class PlaneFit(bpy.types.Operator):
 def menu_func(self, context):
 	self.layout.operator(PlaneFit.bl_idname, text="Fit plane to selected",
 						icon='PLUGIN')
+	self.layout.operator(PlaneFit.bl_idname, text="Fit separate plane to selected",
+						icon='PLUGIN').separate=True
 
 def register():
 	bpy.utils.register_module(__name__)
