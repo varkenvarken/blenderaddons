@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201805271624),
+    "version": (0, 0, 201805271642),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -64,6 +64,12 @@ def ray_trace(scene, width, height):
             # the default background is black for now
             color = np.zeros(3)
             if hit:
+                # the get the diffuse color of the object we hit
+                diffuse_color = Vector((0.8, 0.8, 0.8))
+                mat_slots = ob.material_slots
+                if len(mat_slots):
+                    diffuse_color = mat_slots[0].material.diffuse_color
+                        
                 color = np.zeros(3)
                 light = np.ones(3) * intensity  # light color is white
                 for lamp in lamps:
@@ -82,7 +88,7 @@ def ray_trace(scene, width, height):
                         # we calculate diffuse reflectance with a pure 
                         # lambertian model
                         # https://en.wikipedia.org/wiki/Lambertian_reflectance
-                        color += intensity * normal.dot(light_dir)/light_dist
+                        color += diffuse_color * intensity * normal.dot(light_dir)/light_dist
             buf[y,x,0:3] = color
     return buf
 
