@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201805271137),
+    "version": (0, 0, 201805271624),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -31,7 +31,7 @@ bl_info = {
 
 import bpy
 import numpy as np
-
+from mathutils import Vector
 
 def ray_trace(scene, width, height):     
 
@@ -44,8 +44,9 @@ def ray_trace(scene, width, height):
     buf = np.ones(width*height*4)
     buf.shape = height,width,4
 
-    # the location of our virtual camera (we do NOT use any camera that might be present)
-    origin = (8,0,0)
+    # the location and orientation of the active camera
+    origin = scene.camera.location
+    rotation = scene.camera.rotation_euler
 
     aspectratio = height/width
     # loop over all pixels once (no multisampling)
@@ -53,8 +54,9 @@ def ray_trace(scene, width, height):
         yscreen = ((y-(height/2))/height) * aspectratio
         for x in range(width):
             xscreen = (x-(width/2))/width
-            # get the direction. camera points in -x direction, FOV = approx asin(1/8) = 7 degrees
-            dir = (-1, xscreen, yscreen)
+            # align the look_at direction
+            dir = Vector((xscreen, yscreen, -1))
+            dir.rotate(rotation)
             
             # cast a ray into the scene
             hit, loc, normal, index, ob, mat = scene.ray_cast(origin, dir)
