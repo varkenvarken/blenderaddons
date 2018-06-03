@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201805271642),
+    "version": (0, 0, 201806030956),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -37,7 +37,7 @@ def ray_trace(scene, width, height):
 
     lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
 
-    intensity = 10  # intensity for all lamps
+    lamp_intensity = 10  # intensity for all lamps
     eps = 1e-5      # small offset to prevent self intersection for secondary rays
 
     # create a buffer to store the calculated intensities
@@ -57,21 +57,26 @@ def ray_trace(scene, width, height):
             # align the look_at direction
             dir = Vector((xscreen, yscreen, -1))
             dir.rotate(rotation)
-            
+            dir = dir.normalized()
+
             # cast a ray into the scene
             hit, loc, normal, index, ob, mat = scene.ray_cast(origin, dir)
             
             # the default background is black for now
             color = np.zeros(3)
             if hit:
-                # the get the diffuse color of the object we hit
+                # get the diffuse and specular color and intensity of the object we hit
                 diffuse_color = Vector((0.8, 0.8, 0.8))
+                specular_color = Vector((0.2, 0.2, 0.2))
                 mat_slots = ob.material_slots
+                hardness = 0
                 if len(mat_slots):
-                    diffuse_color = mat_slots[0].material.diffuse_color
-                        
+                    diffuse_color = mat_slots[0].material.diffuse_color * mat_slots[0].material.diffuse_intensity
+                    specular_color = mat_slots[0].material.specular_color * mat_slots[0].material.specular_intensity
+                    hardness = mat_slots[0].material.specular_hardness
+
                 color = np.zeros(3)
-                light = np.ones(3) * intensity  # light color is white
+                light = np.ones(3) * lamp_intensity  # light color is white
                 for lamp in lamps:
                     # for every lamp determine the direction and distance
                     light_vec = lamp.location - loc
@@ -88,7 +93,13 @@ def ray_trace(scene, width, height):
                         # we calculate diffuse reflectance with a pure 
                         # lambertian model
                         # https://en.wikipedia.org/wiki/Lambertian_reflectance
-                        color += diffuse_color * intensity * normal.dot(light_dir)/light_dist
+                        illumination = light * normal.dot(light_dir)/light_dist
+                        color += np.array(diffuse_color) * illumination  # need cast: Color cannot be multiplies with an np.array
+                        if hardness > 0:  # phong reflection model
+                            half = (light_dir - dir).normalized()
+                            reflection = half.dot(normal) ** hardness
+                            color += np.array(specular_color) * reflection
+
             buf[y,x,0:3] = color
     return buf
 
@@ -130,6 +141,7 @@ def register():
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
@@ -141,6 +153,7 @@ def unregister():
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
 
 if __name__ == "__main__":
     register()
