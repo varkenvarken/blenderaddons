@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806030956),
+    "version": (0, 0, 201806031453),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -33,12 +33,57 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-def ray_trace(scene, width, height):     
+def single_ray(scene, origin, dir, lamps, depth=0):
+    eps = 1e-5      # small offset to prevent self intersection for secondary rays
+
+    # cast a ray into the scene
+    hit, loc, normal, index, ob, mat = scene.ray_cast(origin, dir)
+    
+    # the default background is black for now
+    color = np.zeros(3)
+    if hit:
+        # get the diffuse and specular color and intensity of the object we hit
+        diffuse_color = Vector((0.8, 0.8, 0.8))
+        specular_color = Vector((0.2, 0.2, 0.2))
+        mat_slots = ob.material_slots
+        hardness = 0
+        if len(mat_slots):
+            mat = mat_slots[0].material
+            diffuse_color = mat.diffuse_color * mat.diffuse_intensity
+            specular_color = mat.specular_color * mat.specular_intensity
+            hardness = mat.specular_hardness
+
+        color = np.zeros(3)
+        for lamp in lamps:
+            light = np.array(lamp.data.color * lamp.data.energy)
+            # for every lamp determine the direction and distance
+            light_vec = lamp.location - loc
+            light_dist = light_vec.length_squared
+            light_dir = light_vec.normalized()
+            
+            # cast a ray in the direction of the light starting
+            # at the original hit location
+            lhit, lloc, lnormal, lindex, lob, lmat = scene.ray_cast(loc+light_dir*eps, light_dir)
+            
+            # if we hit something we are in the shadow of the light
+            if not lhit:
+                # otherwise we add the distance attenuated intensity
+                # we calculate diffuse reflectance with a pure 
+                # lambertian model
+                # https://en.wikipedia.org/wiki/Lambertian_reflectance
+                illumination = light * normal.dot(light_dir)/light_dist
+                color += np.array(diffuse_color) * illumination  # need cast: Color cannot be multiplies with an np.array
+                if hardness > 0:  # phong reflection model
+                    half = (light_dir - dir).normalized()
+                    reflection = light * half.dot(normal) ** hardness
+                    color += np.array(specular_color) * reflection
+    return color
+
+def ray_trace(scene, width, height, depth):     
 
     lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
 
     lamp_intensity = 10  # intensity for all lamps
-    eps = 1e-5      # small offset to prevent self intersection for secondary rays
 
     # create a buffer to store the calculated intensities
     buf = np.ones(width*height*4)
@@ -58,49 +103,8 @@ def ray_trace(scene, width, height):
             dir = Vector((xscreen, yscreen, -1))
             dir.rotate(rotation)
             dir = dir.normalized()
+            buf[y,x,0:3] = single_ray(scene, origin, dir, lamps, depth)
 
-            # cast a ray into the scene
-            hit, loc, normal, index, ob, mat = scene.ray_cast(origin, dir)
-            
-            # the default background is black for now
-            color = np.zeros(3)
-            if hit:
-                # get the diffuse and specular color and intensity of the object we hit
-                diffuse_color = Vector((0.8, 0.8, 0.8))
-                specular_color = Vector((0.2, 0.2, 0.2))
-                mat_slots = ob.material_slots
-                hardness = 0
-                if len(mat_slots):
-                    diffuse_color = mat_slots[0].material.diffuse_color * mat_slots[0].material.diffuse_intensity
-                    specular_color = mat_slots[0].material.specular_color * mat_slots[0].material.specular_intensity
-                    hardness = mat_slots[0].material.specular_hardness
-
-                color = np.zeros(3)
-                light = np.ones(3) * lamp_intensity  # light color is white
-                for lamp in lamps:
-                    # for every lamp determine the direction and distance
-                    light_vec = lamp.location - loc
-                    light_dist = light_vec.length_squared
-                    light_dir = light_vec.normalized()
-                    
-                    # cast a ray in the direction of the light starting
-                    # at the original hit location
-                    lhit, lloc, lnormal, lindex, lob, lmat = scene.ray_cast(loc+light_dir*eps, light_dir)
-                    
-                    # if we hit something we are in the shadow of the light
-                    if not lhit:
-                        # otherwise we add the distance attenuated intensity
-                        # we calculate diffuse reflectance with a pure 
-                        # lambertian model
-                        # https://en.wikipedia.org/wiki/Lambertian_reflectance
-                        illumination = light * normal.dot(light_dir)/light_dist
-                        color += np.array(diffuse_color) * illumination  # need cast: Color cannot be multiplies with an np.array
-                        if hardness > 0:  # phong reflection model
-                            half = (light_dir - dir).normalized()
-                            reflection = light * half.dot(normal) ** hardness
-                            color += np.array(specular_color) * reflection
-
-            buf[y,x,0:3] = color
     return buf
 
 # straight from https://docs.blender.org/api/current/bpy.types.RenderEngine.html?highlight=renderengine
@@ -120,7 +124,7 @@ class CustomRenderEngine(bpy.types.RenderEngine):
             self.render_scene(scene)
 
     def render_scene(self, scene):
-        buf = ray_trace(scene, self.size_x, self.size_y)
+        buf = ray_trace(scene, self.size_x, self.size_y, 0)
         buf.shape = -1,4
 
         # Here we write the pixel values to the RenderResult
@@ -136,24 +140,28 @@ def register():
     from bl_ui import (
             properties_render,
             properties_material,
+            properties_data_lamp,
             )
     properties_render.RENDER_PT_render.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
     from bl_ui import (
             properties_render,
             properties_material,
+            properties_data_lamp,
             )
     properties_render.RENDER_PT_render.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
 
 if __name__ == "__main__":
     register()
