@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806031453),
+    "version": (0, 0, 201806031534),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -47,11 +47,14 @@ def single_ray(scene, origin, dir, lamps, depth=0):
         specular_color = Vector((0.2, 0.2, 0.2))
         mat_slots = ob.material_slots
         hardness = 0
+        mirror_reflectivity = 0
         if len(mat_slots):
             mat = mat_slots[0].material
             diffuse_color = mat.diffuse_color * mat.diffuse_intensity
             specular_color = mat.specular_color * mat.specular_intensity
             hardness = mat.specular_hardness
+            if mat.raytrace_mirror.use:
+                mirror_reflectivity = mat.raytrace_mirror.reflect_factor
 
         color = np.zeros(3)
         for lamp in lamps:
@@ -77,6 +80,14 @@ def single_ray(scene, origin, dir, lamps, depth=0):
                     half = (light_dir - dir).normalized()
                     reflection = light * half.dot(normal) ** hardness
                     color += np.array(specular_color) * reflection
+
+        # calculate reflections from the environment
+        # for now we do not look at mat.raytrace_mirror.depth
+        if depth > 0 and mirror_reflectivity > 0:
+            # Rr = Ri - 2 N (Ri . N) see: http://paulbourke.net/geometry/reflected/
+            reflection_dir = (dir - 2 * normal  * dir.dot(normal)).normalized()
+            color += mirror_reflectivity * single_ray(scene, loc + normal*eps, reflection_dir, lamps, depth-1)
+
     return color
 
 def ray_trace(scene, width, height, depth):     
@@ -124,7 +135,7 @@ class CustomRenderEngine(bpy.types.RenderEngine):
             self.render_scene(scene)
 
     def render_scene(self, scene):
-        buf = ray_trace(scene, self.size_x, self.size_y, 0)
+        buf = ray_trace(scene, self.size_x, self.size_y, 1)
         buf.shape = -1,4
 
         # Here we write the pixel values to the RenderResult
@@ -147,6 +158,7 @@ def register():
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
 
 def unregister():
@@ -161,6 +173,7 @@ def unregister():
     properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_diffuse.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
 
 if __name__ == "__main__":
