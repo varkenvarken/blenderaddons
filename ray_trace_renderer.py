@@ -97,7 +97,7 @@ def ray_trace(scene, width, height):
                         color += np.array(diffuse_color) * illumination  # need cast: Color cannot be multiplies with an np.array
                         if hardness > 0:  # phong reflection model
                             half = (light_dir - dir).normalized()
-                            reflection = half.dot(normal) ** hardness
+                            reflection = light * half.dot(normal) ** hardness
                             color += np.array(specular_color) * reflection
 
             buf[y,x,0:3] = color
