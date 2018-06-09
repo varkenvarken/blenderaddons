@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806031534),
+    "version": (0, 0, 201806081111),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -32,6 +32,11 @@ bl_info = {
 import bpy
 import numpy as np
 from mathutils import Vector
+from math import acos, atan2, pi
+
+X = Vector((1,0,0))
+Y = Vector((0,1,0))
+Z = Vector((0,0,1))
 
 def single_ray(scene, origin, dir, lamps, depth=0):
     eps = 1e-5      # small offset to prevent self intersection for secondary rays
@@ -87,7 +92,13 @@ def single_ray(scene, origin, dir, lamps, depth=0):
             # Rr = Ri - 2 N (Ri . N) see: http://paulbourke.net/geometry/reflected/
             reflection_dir = (dir - 2 * normal  * dir.dot(normal)).normalized()
             color += mirror_reflectivity * single_ray(scene, loc + normal*eps, reflection_dir, lamps, depth-1)
-
+    elif scene.world.active_texture:
+        # intersect with an environment image
+        # dir is normalized so the hypothenuse == length == 1
+        # which means the z component == cos(angle)
+        theta = 1-acos(dir.z)/pi  # [-1,1] -> [0,1] 
+        phi = atan2(dir.y, dir.x)/pi
+        color = np.array(scene.world.active_texture.evaluate((-phi,2*theta-1,0)).xyz)
     return color
 
 def ray_trace(scene, width, height, depth):     
@@ -145,13 +156,14 @@ class CustomRenderEngine(bpy.types.RenderEngine):
         self.end_result(result)
 
 
-
 def register():
     bpy.utils.register_module(__name__)
     from bl_ui import (
             properties_render,
             properties_material,
             properties_data_lamp,
+            properties_world,
+            properties_texture,
             )
     properties_render.RENDER_PT_render.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
@@ -160,6 +172,11 @@ def register():
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_world.WORLD_PT_context_world.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_context_texture.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_preview.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_image.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_mapping.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
@@ -167,6 +184,8 @@ def unregister():
             properties_render,
             properties_material,
             properties_data_lamp,
+            properties_world,
+            properties_texture,
             )
     properties_render.RENDER_PT_render.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
@@ -175,6 +194,11 @@ def unregister():
     properties_material.MATERIAL_PT_specular.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_world.WORLD_PT_context_world.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_context_texture.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_preview.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_image.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_texture.TEXTURE_PT_mapping.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
 
 if __name__ == "__main__":
     register()
