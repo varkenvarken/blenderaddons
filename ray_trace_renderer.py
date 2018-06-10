@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806081111),
+    "version": (0, 0, 201806101211),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -34,11 +34,48 @@ import numpy as np
 from mathutils import Vector
 from math import acos, atan2, pi
 
+def cosine_transform(scene):
+    tex = scene.world.active_texture
+    if tex:
+        img = tex.image
+        p = np.array(scene.world.active_texture.image.pixels, dtype=np.float32)
+        y,x = img.size[1],img.size[0]
+        p.shape = y,x,-1
+        
+        # calculate the angles (inclination and azimuth)
+        theta = (np.arange(y, dtype=np.float32)/(y-1) - 0.5)*np.pi
+        phi = (np.arange(x, dtype=np.float32)/(x-1) - 0.5)*2*np.pi
+        
+        # allocate space for the convoluted colors
+        c = np.zeros(p.shape, dtype=np.float32)
+        
+        # calculate the direction vectors (r = 1)
+        d = np.empty((y,x,3), dtype=np.float32)
+        costheta = np.cos(theta)
+        sintheta = np.sin(theta)
+        cosphi = np.cos(phi)
+        sinphi = np.sin(phi)
+        d[:,:,0] = np.outer(costheta, cosphi)
+        d[:,:,1] = np.outer(costheta, sinphi)
+        d[:,:,2] = np.outer(sintheta, np.ones(x, dtype=np.float32))
+        
+        d.shape = -1,3
+        p.shape = x*y,-1
+        w = np.einsum('ij,...j',d,d)
+        print(x,y,w.shape)
+        print(np.count_nonzero(w<0)/(w.shape[0]*w.shape[1]))
+        w[w<0] = 0.0
+        wc = np.dot(w,p) * (scene.world.light_settings.environment_energy / w.shape[0])
+        print(wc.shape)
+        wc.shape = y,x,-1
+        return wc
+    return None
+        
 X = Vector((1,0,0))
 Y = Vector((0,1,0))
 Z = Vector((0,0,1))
 
-def single_ray(scene, origin, dir, lamps, depth=0):
+def single_ray(scene, origin, dir, lamps, depth, gi):
     eps = 1e-5      # small offset to prevent self intersection for secondary rays
 
     # cast a ray into the scene
@@ -91,7 +128,16 @@ def single_ray(scene, origin, dir, lamps, depth=0):
         if depth > 0 and mirror_reflectivity > 0:
             # Rr = Ri - 2 N (Ri . N) see: http://paulbourke.net/geometry/reflected/
             reflection_dir = (dir - 2 * normal  * dir.dot(normal)).normalized()
-            color += mirror_reflectivity * single_ray(scene, loc + normal*eps, reflection_dir, lamps, depth-1)
+            color += mirror_reflectivity * single_ray(scene, loc + normal*eps, reflection_dir, lamps, depth-1, gi)
+
+        # calculate global illumination (ambient light)
+        if gi is not None:
+            theta = acos(normal.z)/pi  # [-1,1] -> [pi,0] -> [1,0] 
+            phi = ((-atan2(normal.y, normal.x)/pi) + 1)/2  # [pi,-pi] -> [-1,1] -> [0,2] ->[0,1]
+            y = int(gi.shape[0] * theta)
+            x = int(gi.shape[1] * phi)
+            color += gi[y,x,:3]
+                
     elif scene.world.active_texture:
         # intersect with an environment image
         # dir is normalized so the hypothenuse == length == 1
@@ -101,7 +147,7 @@ def single_ray(scene, origin, dir, lamps, depth=0):
         color = np.array(scene.world.active_texture.evaluate((-phi,2*theta-1,0)).xyz)
     return color
 
-def ray_trace(scene, width, height, depth):     
+def ray_trace(scene, width, height, depth, gi):     
 
     lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
 
@@ -125,7 +171,7 @@ def ray_trace(scene, width, height, depth):
             dir = Vector((xscreen, yscreen, -1))
             dir.rotate(rotation)
             dir = dir.normalized()
-            buf[y,x,0:3] = single_ray(scene, origin, dir, lamps, depth)
+            buf[y,x,0:3] = single_ray(scene, origin, dir, lamps, depth, gi)
 
     return buf
 
@@ -146,7 +192,10 @@ class CustomRenderEngine(bpy.types.RenderEngine):
             self.render_scene(scene)
 
     def render_scene(self, scene):
-        buf = ray_trace(scene, self.size_x, self.size_y, 1)
+        gi = None
+        if scene.world.light_settings.use_environment_light:
+            gi = cosine_transform(scene)
+        buf = ray_trace(scene, self.size_x, self.size_y, 1, gi)
         buf.shape = -1,4
 
         # Here we write the pixel values to the RenderResult
@@ -173,6 +222,7 @@ def register():
     properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_world.WORLD_PT_context_world.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
+    properties_world.WORLD_PT_environment_lighting.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_context_texture.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_preview.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_image.COMPAT_ENGINES.add(CustomRenderEngine.bl_idname)
@@ -195,6 +245,7 @@ def unregister():
     properties_material.MATERIAL_PT_mirror.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_data_lamp.DATA_PT_lamp.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_world.WORLD_PT_context_world.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
+    properties_world.WORLD_PT_environment_lighting.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_context_texture.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_preview.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
     properties_texture.TEXTURE_PT_image.COMPAT_ENGINES.remove(CustomRenderEngine.bl_idname)
