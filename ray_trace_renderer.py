@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806101211),
+    "version": (0, 0, 201806121639),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -37,19 +37,22 @@ from math import acos, atan2, pi
 def cosine_transform(scene):
     tex = scene.world.active_texture
     if tex:
-        img = tex.image
-        p = np.array(scene.world.active_texture.image.pixels, dtype=np.float32)
+        # scale image to a managable size
+        img = tex.image.copy()
+        img.scale(256,128)
+        # get the pixels in an ordered array (works for any depth)
+        p = np.array(img.pixels, dtype=np.float32)
         y,x = img.size[1],img.size[0]
         p.shape = y,x,-1
         
-        # calculate the angles (inclination and azimuth)
+        # calculate the range of angles (inclination and azimuth)
         theta = (np.arange(y, dtype=np.float32)/(y-1) - 0.5)*np.pi
         phi = (np.arange(x, dtype=np.float32)/(x-1) - 0.5)*2*np.pi
         
         # allocate space for the convoluted colors
         c = np.zeros(p.shape, dtype=np.float32)
         
-        # calculate the direction vectors (r = 1)
+        # calculate the cartesian direction vectors (r = 1)
         d = np.empty((y,x,3), dtype=np.float32)
         costheta = np.cos(theta)
         sintheta = np.sin(theta)
@@ -58,15 +61,21 @@ def cosine_transform(scene):
         d[:,:,0] = np.outer(costheta, cosphi)
         d[:,:,1] = np.outer(costheta, sinphi)
         d[:,:,2] = np.outer(sintheta, np.ones(x, dtype=np.float32))
-        
+
+        # convert d to a single list of 3-vectors
         d.shape = -1,3
+        # convert p to a single list of n-vectors
         p.shape = x*y,-1
+        # for each direction, calculate the sum of dot products with all
+        # other direction vectors.
+        # This might be done in a more clever way
         w = np.einsum('ij,...j',d,d)
-        print(x,y,w.shape)
-        print(np.count_nonzero(w<0)/(w.shape[0]*w.shape[1]))
+        # truncate negative dot product (i.e. backward pointing normals)
         w[w<0] = 0.0
+        # for each direction calculate the weighted environment contribution
+        print(d.shape, w.shape, p.shape)
         wc = np.dot(w,p) * (scene.world.light_settings.environment_energy / w.shape[0])
-        print(wc.shape)
+        # reshape the environment map
         wc.shape = y,x,-1
         return wc
     return None
