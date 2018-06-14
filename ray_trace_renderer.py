@@ -141,7 +141,7 @@ def single_ray(scene, origin, dir, lamps, depth, gi):
 
         # calculate global illumination (ambient light)
         if gi is not None:
-            theta = acos(normal.z)/pi  # [-1,1] -> [pi,0] -> [1,0] 
+            theta = 1-acos(normal.z)/pi  # [-1,1] -> [pi,0] -> [1,0] 
             phi = ((-atan2(normal.y, normal.x)/pi) + 1)/2  # [pi,-pi] -> [-1,1] -> [0,2] ->[0,1]
             y = int(gi.shape[0] * theta)
             x = int(gi.shape[1] * phi)
@@ -156,15 +156,11 @@ def single_ray(scene, origin, dir, lamps, depth, gi):
         color = np.array(scene.world.active_texture.evaluate((-phi,2*theta-1,0)).xyz)
     return color
 
-def ray_trace(scene, width, height, depth, gi):     
+def ray_trace(scene, width, height, depth, buf, gi):     
 
     lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
 
     lamp_intensity = 10  # intensity for all lamps
-
-    # create a buffer to store the calculated intensities
-    buf = np.ones(width*height*4)
-    buf.shape = height,width,4
 
     # the location and orientation of the active camera
     origin = scene.camera.location
@@ -181,8 +177,7 @@ def ray_trace(scene, width, height, depth, gi):
             dir.rotate(rotation)
             dir = dir.normalized()
             buf[y,x,0:3] = single_ray(scene, origin, dir, lamps, depth, gi)
-
-    return buf
+        yield y
 
 # straight from https://docs.blender.org/api/current/bpy.types.RenderEngine.html?highlight=renderengine
 class CustomRenderEngine(bpy.types.RenderEngine):
@@ -204,13 +199,22 @@ class CustomRenderEngine(bpy.types.RenderEngine):
         gi = None
         if scene.world.light_settings.use_environment_light:
             gi = cosine_transform(scene)
-        buf = ray_trace(scene, self.size_x, self.size_y, 1, gi)
-        buf.shape = -1,4
-
-        # Here we write the pixel values to the RenderResult
+        # create a buffer to store the calculated intensities
+        height, width = self.size_y, self.size_x
+        buf = np.ones(width*height*4)
+        buf.shape = height,width,4
+        
         result = self.begin_result(0, 0, self.size_x, self.size_y)
         layer = result.layers[0].passes["Combined"]
-        layer.rect = buf.tolist()
+        
+        for y in ray_trace(scene, width, height, 1, buf, gi):
+            buf.shape = -1,4
+            # Here we write the pixel values to the RenderResult
+            layer.rect = buf.tolist()
+            self.update_result(result)
+            buf.shape = height,width,4
+            self.update_progress(y/height)
+        
         self.end_result(result)
 
 
