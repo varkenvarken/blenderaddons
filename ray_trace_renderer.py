@@ -20,7 +20,7 @@
 bl_info = {
     "name": "ray_trace_renderer",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201806121639),
+    "version": (0, 0, 201806161245),
     "blender": (2, 79, 0),
     "location": "",
     "description": "Create a ray traced image of the current scene",
@@ -33,6 +33,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 from math import acos, atan2, pi
+from random import random, seed
 
 def cosine_transform(scene):
     tex = scene.world.active_texture
@@ -83,6 +84,14 @@ def cosine_transform(scene):
 X = Vector((1,0,0))
 Y = Vector((0,1,0))
 Z = Vector((0,0,1))
+
+def vdc(n, base=2):
+    vdc, denom = 0,1
+    while n:
+        denom *= base
+        n, remainder = divmod(n, base)
+        vdc += remainder / denom
+    return vdc
 
 def single_ray(scene, origin, dir, lamps, depth, gi):
     eps = 1e-5      # small offset to prevent self intersection for secondary rays
@@ -156,7 +165,7 @@ def single_ray(scene, origin, dir, lamps, depth, gi):
         color = np.array(scene.world.active_texture.evaluate((-phi,2*theta-1,0)).xyz)
     return color
 
-def ray_trace(scene, width, height, depth, buf, gi):     
+def ray_trace(scene, width, height, depth, buf, samples, gi):     
 
     lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
 
@@ -166,18 +175,32 @@ def ray_trace(scene, width, height, depth, buf, gi):
     origin = scene.camera.location
     rotation = scene.camera.rotation_euler
 
+    sbuf = np.zeros(width*height*4)
+    sbuf.shape = height,width,4
+
     aspectratio = height/width
-    # loop over all pixels once (no multisampling)
-    for y in range(height):
-        yscreen = ((y-(height/2))/height) * aspectratio
-        for x in range(width):
-            xscreen = (x-(width/2))/width
-            # align the look_at direction
-            dir = Vector((xscreen, yscreen, -1))
-            dir.rotate(rotation)
-            dir = dir.normalized()
-            buf[y,x,0:3] = single_ray(scene, origin, dir, lamps, depth, gi)
-        yield y
+    # loop over all pixels
+    dy = aspectratio/height
+    dx = 1/width
+    seed(42)
+
+    N = samples*width*height
+    for s in range(samples):
+        for y in range(height):
+            yscreen = ((y-(height/2))/height) * aspectratio
+            for x in range(width):
+                xscreen = (x-(width/2))/width
+                sumcolor = np.zeros(3, dtype=np.float32)
+                # align the look_at direction after perturbing it a bit
+                #dir = Vector((xscreen + dx*(random()-0.5), yscreen + dy*(random()-0.5), -1))
+                dir = Vector((xscreen + dx*(vdc(s,2)-0.5), yscreen + dy*(vdc(s,3)-0.5), -1))
+                dir.rotate(rotation)
+                dir = dir.normalized()
+                sbuf[y,x,0:3] += single_ray(scene, origin, dir, lamps, depth, gi)
+            buf[y,:,0:3] = sbuf[y,:,0:3] / (s+1)
+            if y < height-1:
+                buf[y+1,:,0:3] = 1 - buf[y+1,:,0:3]
+            yield (s*width*height+width*y)/N
 
 # straight from https://docs.blender.org/api/current/bpy.types.RenderEngine.html?highlight=renderengine
 class CustomRenderEngine(bpy.types.RenderEngine):
@@ -207,17 +230,43 @@ class CustomRenderEngine(bpy.types.RenderEngine):
         result = self.begin_result(0, 0, self.size_x, self.size_y)
         layer = result.layers[0].passes["Combined"]
         
-        for y in ray_trace(scene, width, height, 1, buf, gi):
+        # note that anti_aliasing_samples is a string for no obvious reason
+        samples = int(scene.render.antialiasing_samples) if scene.render.use_antialiasing else 1
+        for p in ray_trace(scene, width, height, 1, buf, samples, gi):
             buf.shape = -1,4
             # Here we write the pixel values to the RenderResult
             layer.rect = buf.tolist()
             self.update_result(result)
             buf.shape = height,width,4
-            self.update_progress(y/height)
+            self.update_progress(p)
+            if self.test_break():
+                break
         
         self.end_result(result)
 
+from bpy.types import Panel
+from bl_ui.properties_render import RenderButtonsPanel
 
+class CUSTOM_RENDER_PT_antialiasing(RenderButtonsPanel, Panel):
+    bl_label = "Anti-Aliasing"
+    COMPAT_ENGINES = {CustomRenderEngine.bl_idname}
+
+    def draw_header(self, context):
+        rd = context.scene.render
+
+        self.layout.prop(rd, "use_antialiasing", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        rd = context.scene.render
+        layout.active = rd.use_antialiasing
+
+        split = layout.split()
+
+        col = split.column()
+        col.row().prop(rd, "antialiasing_samples", expand=True)
+        
 def register():
     bpy.utils.register_module(__name__)
     from bl_ui import (
