@@ -23,7 +23,7 @@
 bl_info = {
 	"name": "MetaballSize",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201809231454),
+	"version": (0, 0, 201809231614),
 	"blender": (2, 79, 0),
 	"location": "View3D > Metaball",
 	"description": "Scale attributes of all elements in a metaball",
@@ -34,6 +34,7 @@ bl_info = {
 
 import bpy
 from bpy.props import FloatVectorProperty, FloatProperty
+from bpy.types import Panel
 
 class MetaballSize(bpy.types.Operator):
 	bl_idname = "mesh.metaballsize"
@@ -62,6 +63,21 @@ class MetaballSize(bpy.types.Operator):
 			e.radius *= self.radius
 			e.stiffness *= self.stiffness
 		return {'FINISHED'}
+
+class DATA_PT_metaball_element_extra(Panel):
+	bl_space_type = 'PROPERTIES'
+	bl_region_type = 'WINDOW'
+	bl_context = "data"
+	bl_label = "Active Element II"
+
+	@classmethod
+	def poll(cls, context):
+		return (context.meta_ball and context.meta_ball.elements.active)
+
+	def draw(self, context):
+		layout = self.layout
+		metaelem = context.meta_ball.elements.active
+		layout.prop(metaelem, "radius", text="Radius")
 
 def menu_func(self, context):
 	self.layout.separator()
