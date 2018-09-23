@@ -23,7 +23,7 @@
 bl_info = {
 	"name": "MetaballSize",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201809231614),
+	"version": (0, 0, 201809231640),
 	"blender": (2, 79, 0),
 	"location": "View3D > Metaball",
 	"description": "Scale attributes of all elements in a metaball",
@@ -33,7 +33,7 @@ bl_info = {
 	"category": "Metaballs"}
 
 import bpy
-from bpy.props import FloatVectorProperty, FloatProperty
+from bpy.props import FloatVectorProperty, FloatProperty, EnumProperty
 from bpy.types import Panel
 
 class MetaballSize(bpy.types.Operator):
@@ -47,6 +47,15 @@ class MetaballSize(bpy.types.Operator):
 	radius = FloatProperty(name="Radius", default=1.0, min=0.0)
 
 	stiffness = FloatProperty(name="Stiffness", default=1.0, min=0.0)
+
+	type = EnumProperty(name="Type",
+		items = [('KEEP','Keep','Do not change the type'),
+				 ('CUBE','Cube','Cube'),
+				 ('ELLIPSOID','Ellipsoid','Ellipsoid'),
+				 ('PLANE','Plane','Plane'),
+				 ('BALL','Ball','Ball'),
+				 ('CAPSULE','Capsule','Capsule')],
+		default = 'KEEP')
 
 	@classmethod
 	def poll(cls, context):
@@ -62,6 +71,9 @@ class MetaballSize(bpy.types.Operator):
 			e.size_z *= self.scale[2]
 			e.radius *= self.radius
 			e.stiffness *= self.stiffness
+		if self.type != 'KEEP':
+			for e in context.active_object.data.elements:
+				e.type = self.type + ''
 		return {'FINISHED'}
 
 class DATA_PT_metaball_element_extra(Panel):
