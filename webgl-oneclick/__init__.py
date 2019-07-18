@@ -107,7 +107,7 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
         settings = context.preferences.addons[__name__].preferences
 
         if self.copy_threejs:
-            for directory in ('build', 'jsm', 'draco'):
+            for directory in ('build', 'jsm', 'draco', 'licenses'):
                 destdir = os.path.join(dest,directory)
                 srcdir = os.path.join(src,directory)
                 if not os.path.exists(destdir):  # todo: option to force removal of existing directories
