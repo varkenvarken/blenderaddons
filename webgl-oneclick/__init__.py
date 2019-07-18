@@ -107,7 +107,7 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
         settings = context.preferences.addons[__name__].preferences
 
         if self.copy_threejs:
-            for directory in ('build', 'jsm', 'draco', 'licenses'):
+            for directory in ('build', 'modules', 'draco', 'licenses'):
                 destdir = os.path.join(dest,directory)
                 srcdir = os.path.join(src,directory)
                 if not os.path.exists(destdir):  # todo: option to force removal of existing directories
@@ -141,7 +141,7 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
                           modelfile=os.path.basename(bpy.path.ensure_ext(self.filepath, self.filename_ext)),
                           stylesheet=stylesheet_name,
                           build='./build',
-                          jsm='./jsm',
+                          jsm='./modules/jsm',
                           draco='./draco/gltf/',
                           textures='textures/',
                           environmentmap=os.path.basename(envmap_file),
