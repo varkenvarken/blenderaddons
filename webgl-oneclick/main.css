@@ -35,6 +35,10 @@ canvas {
 	z-index: 1; /* TODO Solve this in HTML */
 }
 
+#credits { float:right; width:30%; }
+#modelinfo { float:right; width:30%; }
+#instructions { float:right; width:30%; }
+
 .dg.ac {
 	z-index: 2 !important; /* TODO Solve this in HTML */
 }

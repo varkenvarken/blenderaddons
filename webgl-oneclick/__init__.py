@@ -24,7 +24,7 @@
 bl_info = {
     'name': 'glTF one click export',
     'author': 'Michel Anders',
-    "version": (0, 0, 201907181554),
+    "version": (0, 0, 201907190852),
     'blender': (2, 80, 0),
     'location': 'File > Import-Export',
     'description': 'Export object as complete html page',
@@ -57,10 +57,13 @@ class GLTF2OneClickPreferences(bpy.types.AddonPreferences):
 
     stylesheet_name : StringProperty(name="Stylesheet name", default='main.css', description="relative to add-on dir or absolutepath starting with /")
 
+    copyright :  StringProperty(name="Copyright", default='&copy;', description="Copyright, will we displayed below modelname")
+        
     def draw(self, context):
         layout = self.layout
         col0 = layout.column()
         col0.prop(self, 'stylesheet_name')
+        col0.prop(self, 'copyright')
 
 class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
     """Export as a complete glTF 2.0 page"""
@@ -76,6 +79,8 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
     copy_stylesheet: BoolProperty(default=True, name="stylesheet", description="Copy main.css stylesheet")
 
     showbackground: BoolProperty(default=True, name="Show background", description="Show environment map (if any)")
+
+    credits:  StringProperty(name="Credits", default='', description="Credits, will be shown on the right hand side")
     
     ui_tab: EnumProperty(
         items=(('GENERAL', "General", "General settings"),
@@ -97,6 +102,7 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
         col.prop(self, 'copy_threejs')
         col.prop(self, 'copy_stylesheet')
         col.prop(self, 'showbackground')
+        col.prop(self, 'credits')
 
     def execute(self, context):
         result = super().execute(context)
@@ -145,7 +151,10 @@ class ExportGLTF2OneClick(bpy.types.Operator, ExportGLTF2_Base, ExportHelper):
                           draco='./draco/gltf/',
                           textures='textures/',
                           environmentmap=os.path.basename(envmap_file),
-                          showbackground='true' if self.showbackground else 'false')
+                          showbackground='true' if self.showbackground else 'false',
+                          credits=self.credits,
+                          copyright=settings.copyright)
+
         # convert the html file
         with open(os.path.join(src,'model.html')) as f:
             print('read')
