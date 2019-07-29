@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "ColorRampPicker",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201709111457),
-	"blender": (2, 78, 0),
+	"version": (0, 0, 201907290911),
+	"blender": (2, 80, 0),
 	"location": "Node Editor > Node > Color Ramp Picker",
 	"description": "set a range of color setpoints in a selected color ramp by dragging the cursor over a sample area",
 	"warning": "",
@@ -127,12 +127,12 @@ def menu_func_vcol(self, context):
 	self.layout.operator(ColorRampPicker.bl_idname,icon='PLUGIN')
 
 def register():
-	bpy.utils.register_module(__name__)
+	bpy.utils.register_class(ColorRampPicker)
 	bpy.types.NODE_MT_node.append(menu_func_vcol)
 
 def unregister():
-	bpy.types.NODE_MT_node.remove(menu_func_vcol)
-	bpy.utils.unregister_module(__name__)
+	bpy.types.NODE_MT_node.remove(ColorRampPicker)
+	bpy.utils.unregister_class(__name__)
 
 if __name__ == "__main__":
 	register()
