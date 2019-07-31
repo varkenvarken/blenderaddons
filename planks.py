@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Floor Generator, a Blender addon
-#  (c) 2013,2015,2016 Michel J. Anders (varkenvarken)
+#  (c) 2013 - 2019 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201606051530),
-	"blender": (2, 77, 0),
+	"version": (0, 0, 201907310916),
+	"blender": (2, 80, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
 	"warning": "",
@@ -548,13 +548,13 @@ def updateMesh(self, context):
 
 	# add uv-coords and per face random vertex colors
 	rot = Euler((0,0,o.uvrotation))
-	mesh.uv_textures.new()
+	mesh.uv_layers.new()
 	uv_layer = mesh.uv_layers.active.data
 	vertex_colors = mesh.vertex_colors.new().data
 	offset = Vector()
 	# note that the uvs that are returned are shuffled
 	for poly in mesh.polygons:
-		color = [rand(), rand(), rand()]
+		color = [rand(), rand(), rand(), 1.0]
 		if o.randomuv == 'Random':
 			offset = Vector((rand(), rand(), 0))
 		if o.randomuv == 'Restricted':
@@ -1080,19 +1080,17 @@ bpy.types.Object.borderswitch = BoolProperty(name="Switch border",
 									update=updateMesh)
 
 
-    
 class FloorBoards(bpy.types.Panel):
-	bl_idname = "FloorBoards"
+	bl_idname = "OBJECT_PT_floorboards"
 	bl_label = "Floorgenerator"
 	bl_space_type = "VIEW_3D"
-	bl_region_type = "TOOLS"
-	bl_category = "Floorgenerator"
-	#bl_options = {'DEFAULT_CLOSED'}
+	bl_region_type = "UI"
+	bl_category = "FloorBoards"
 
 	def draw(self, context):
 		layout = self.layout
 		if bpy.context.mode != 'OBJECT':
-			layout.label('Floorgenerator only works in OBJECT mode.')
+			layout.label(text='Floorgenerator only works in OBJECT mode.')
 		else:
 			o = context.object
 			if 'reg' in o:
@@ -1101,7 +1099,7 @@ class FloorBoards(bpy.types.Panel):
 					
 					box.prop(o, 'pattern')
 					
-					box.label('Floordimensions')
+					box.label(text='Floordimensions')
 					columns = box.row()
 					columns.prop(o, 'length')
 					columns.prop(o, 'width')
@@ -1109,7 +1107,7 @@ class FloorBoards(bpy.types.Panel):
 					columns.prop(o, 'originx')
 					columns.prop(o, 'originy')
 
-					box.label('Planks')
+					box.label(text='Planks')
 					if o.pattern in { 'Herringbone', 'Square', 'Versaille'}:
 						box.prop(o, 'planklength')
 						if o.pattern == 'Square':
@@ -1142,7 +1140,7 @@ class FloorBoards(bpy.types.Panel):
 					if o.pattern == 'Versaille':
 						box.prop(o, 'borderswitch')
 
-					box.label('Randomness')
+					box.label(text='Randomness')
 					columns = box.row()
 					col1 = columns.column()
 					col2 = columns.column()
@@ -1155,7 +1153,7 @@ class FloorBoards(bpy.types.Panel):
 					col1.prop(o, 'randomthickness')
 					col2.prop(o, 'randomseed')
 
-					box.label('Miscellaneous:')
+					box.label(text='Miscellaneous:')
 					box.prop(o, 'usefloorplan')
 					if o.usefloorplan:
 						box.prop(o, 'floorplan')
@@ -1210,12 +1208,15 @@ class FloorBoardsConvert(bpy.types.Operator):
 		o.length = 4
 		return {"FINISHED"}
 
+classes = (FloorBoardsConvert, FloorBoardsAdd, FloorBoards)
 
 def register():
-	bpy.utils.register_module(__name__)
-	bpy.types.INFO_MT_mesh_add.append(menu_func)
+	for c in classes:
+		bpy.utils.register_class(c)
+	bpy.types.VIEW3D_MT_add.append(menu_func)
 
 
 def unregister():
-	bpy.types.INFO_MT_mesh_add.remove(menu_func)
-	bpy.utils.unregister_module(__name__)
+	bpy.types.VIEW3D_MT_add.remove(menu_func)
+	for c in classes:
+		bpy.utils.unregister_class(c)
