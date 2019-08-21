@@ -192,7 +192,7 @@ def delete_program(program):
     bgl.glDeleteProgram(program)
     gl_error('delete_program')
 
-def debug_program(vshader,fshader,gshader, name="Debug"):
+def debug_program(vshader=None,fshader=None,gshader=None, name="Debug"):
     """
     Compile and link OpenGL shaders into a program and deletes
     it again.
@@ -210,4 +210,53 @@ def debug_program(vshader,fshader,gshader, name="Debug"):
     name is arbitray human readable string
     """
     preamble = "#version 330\n"
-    delete_program(compile_program(preamble + vshader,preamble + fshader,preamble + gshader, name))
+    vs = preamble + vshader if vshader is not None else None
+    fs = preamble + fshader if fshader is not None else None
+    gs = preamble + gshader if gshader is not None else None
+    delete_program(compile_program(vs, fs, gs, name))
+
+# tiny test examples
+if __name__ == "__main__":
+    # output will be:
+    # GL Error: 0 (Syntax error sample:vertexshader)
+    # 0(7) : error C1035: assignment of incompatible types
+    # 0(8) : error C0000: syntax error, unexpected '}', expecting ',' or ';' at token "}"
+
+    # [0001] #version 330
+    # [0002] 
+    # [0003]     in vec3  pos;
+    # [0004] 
+    # [0005]     void main()
+    # [0006]     {
+    # [0007]         gl_Position = pos
+    # [0008]     }
+    # [0009] 
+
+    vs_syntax_error = '''
+    in vec3  pos;
+
+    void main()
+    {
+        gl_Position = pos
+    }
+    '''
+
+    debug_program(vshader=vs_syntax_error, name="Syntax error sample")
+    
+    # next example compiles correctly and shows that pos2 is optimzed away;
+    # output will  be:
+    # active attributes
+    # ['GL_FLOAT_VEC3'] pos 
+    # active uniforms
+
+
+    vs_opt = '''
+    in vec3  pos;
+    in vec3  pos2;
+    void main()
+    {
+        gl_Position = vec4(pos, 1.0);
+    }
+    '''
+
+    debug_program(vshader=vs_opt, name="Optimized attribute")
