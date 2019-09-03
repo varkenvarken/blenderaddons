@@ -212,3 +212,9 @@ pip-log.txt
 #Mr Developer
 .mr.developer.cfg
 /vertexcolorcombine.py
+/cm-base.b64
+/cm-gpl.b64
+/createmesh-base .py
+/cm-op.b64
+/createmesh-gpl .py
+/createmesh-op .py

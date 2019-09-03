@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  CreateMesh, a Blender addon
-#  (c) 2016 Michel J. Anders (varkenvarken)
+#  (c) 2016-2019 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "CreateMesh",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 201601131151),
-	"blender": (2, 76, 0),
+	"version": (0, 0, 201909011720),
+	"blender": (2, 80, 0),
 	"location": "View3D > Object > Add Mesh > DumpedMesh",
 	"description": "Adds a mesh object to the scene that was created with the DumpMesh addon",
 	"warning": "",
@@ -171,6 +171,8 @@ class Cube(DumpMesh):
 
 meshes = [ Cube ]
 
+from bpy_extras.object_utils import object_data_add
+
 class CreateMesh(bpy.types.Operator):
 	"""Add mesh objects to the scene"""
 	bl_idname = "mesh.createmesh"
@@ -186,34 +188,29 @@ class CreateMesh(bpy.types.Operator):
 			meshfactory = mesh()
 
 			me = bpy.data.meshes.new(name=meshfactory.__class__.__name__)
-			ob = bpy.data.objects.new(meshfactory.__class__.__name__, me)
-
+			ob = object_data_add(context, me)
 			bm = meshfactory()
 
 			# write the bmesh to the mesh
 			bm.to_mesh(me)
-			me.show_edge_seams = True
 			me.update()
 			bm.free()
 
 			# associate the mesh with the object
 			ob.data = me
 
-			# link the object to the scene & make it active and selected
-			context.scene.objects.link(ob)
-			context.scene.update()
-			context.scene.objects.active = ob
-			ob.select = True
+			context.view_layer.objects.active = ob
+			ob.select_set(True)
 
 		return {'FINISHED'}
 
 def register():
-	bpy.utils.register_module(__name__)
-	bpy.types.INFO_MT_mesh_add.append(menu_func)
+	bpy.utils.register_class(CreateMesh)
+	bpy.types.VIEW3D_MT_add.append(menu_func)
 
 def unregister():
-	bpy.utils.unregister_module(__name__)
-	bpy.types.INFO_MT_mesh_add.remove(menu_func)
+	bpy.utils.unregister_module(CreateMesh)
+	bpy.types.VIEW3D_MT_add.remove(menu_func)
 
 def menu_func(self, context):
 	self.layout.operator(CreateMesh.bl_idname, icon='PLUGIN')
