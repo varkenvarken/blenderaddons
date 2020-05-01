@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Basket Arch, a Blender addon
-#  (c) 2014,2015 Michel J. Anders (varkenvarken)
+#  (c) 2014,2015,2020 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Basket Arch",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 20150206),
-	"blender": (2, 73, 0),
+	"version": (0, 0, 202005010941),
+	"blender": (2, 83, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a basket arch mesh",
 	"warning": "",
@@ -33,7 +33,7 @@ bl_info = {
 									
 from math import atan2, asin, sin, cos, pi, degrees, sqrt
 import bpy, bmesh
-from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty, IntProperty, BoolVectorProperty
+from bpy.props import FloatProperty, BoolProperty, FloatVectorProperty, IntProperty, BoolVectorProperty, StringProperty
 from bpy_extras import object_utils
 
 def circle(x,y,r,s,e,w):
@@ -130,48 +130,30 @@ def basket_arch(W,D,H=0,resolution=1):
 	n = len(co)
 	return co + [(x,y+D,z) for x,y,z in co], [(i,i+1,n+i+1,n+i) for i in range(n-1)]
 
-class BasketArch(bpy.types.Operator):
+class BasketArch(bpy.types.Operator,object_utils.AddObjectHelper):
 	bl_idname = 'mesh.basketarch'
 	bl_label = 'Create a basket arch'
 	bl_options = {'REGISTER','UNDO'}
 
-	view_align = BoolProperty(
-			name="Align to View",
-			default=False,
-			)
-	location = FloatVectorProperty(
-			name="Location",
-			subtype='TRANSLATION',
-			)
-	rotation = FloatVectorProperty(
-			name="Rotation",
-			subtype='EULER',
-			)
-	width = FloatProperty(
+	width : FloatProperty(
 			name="Width",description="Width of the basket arch (span)",
 			default=4,
 			subtype='DISTANCE',
 			unit='LENGTH')
-	height = FloatProperty(
+	height : FloatProperty(
 			name="Height",description="Height of the basket arch (0 if classical)",
 			default=0,
 			subtype='DISTANCE',
 			unit='LENGTH')
-	depth = FloatProperty(
+	depth : FloatProperty(
 			name="Depth",description="Depth of the basket arch",
 			default=1,
 			subtype='DISTANCE',
 			unit='LENGTH')
-	resolution = IntProperty(
+	resolution : IntProperty(
 			name="Resolution", description="Higher values = less polygons",
 			default=1,
 			min = 1)
-	layers = BoolVectorProperty( # see: https://developer.blender.org/rB0f63ce61c52fce82f18df687369d513c3b6c19b1
-			name="Layers",
-			subtype='LAYER',
-			description="Object Layers",
-			size=20,
-			)
 
 	def execute(self, context):
 
@@ -203,10 +185,10 @@ def menu_func(self, context):
 						icon='PLUGIN')
 
 def register():
-	bpy.utils.register_module(__name__)
-	bpy.types.INFO_MT_mesh_add.append(menu_func)
+	bpy.utils.register_class(BasketArch)
+	bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
 
 
 def unregister():
-	bpy.types.INFO_MT_mesh_add.remove(menu_func)
-	bpy.utils.unregister_module(__name__)
+	bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
+	bpy.utils.unregister_class(BasketArch)
