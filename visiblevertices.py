@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  VisibleVertices.py , a Blender addon to weight paint vertices visible from the active camera.
-#  (c) 2014 Michel J. Anders (varkenvarken)
+#  (c) 2014-2019 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -24,8 +24,8 @@
 bl_info = {
 	"name": "VisibleVertices",
 	"author": "Michel Anders (varkenvarken)",
-	"version": (0, 0, 3),
-	"blender": (2, 70, 0),
+	"version": (0, 0, 2019112807),
+	"blender": (2, 80, 0),
 	"location": "View3D > Weight Paint > Weights > Visible Vertices",
 	"description": "Replace active vertex group with weight > 0.0 if visible from active camera, 0.0 otherwise",
 	"warning": "",
@@ -45,9 +45,9 @@ def intersect_ray_quad_3d(quad, origin, destination):
 		p = intersect_ray_tri(quad[2],quad[3],quad[0],ray,origin)
 	return p
 
-def intersect_ray_scene(scene, origin, destination):
+def intersect_ray_scene(scene, view_layer, origin, destination):
 	direction = destination - origin
-	result, object, matrix, location, normal = scene.ray_cast(origin + direction*0.0001, destination)
+	result, location, normal, index, object, matrix = scene.ray_cast(view_layer=view_layer, origin=origin + direction*0.0001, direction=destination)
 	if result:
 		if object.type == 'Camera': # if have no idea if a camera can return true but just to play safe
 			result = False
@@ -58,16 +58,16 @@ class VisibleVertices(bpy.types.Operator):
 	bl_label = "VisibleVertices"
 	bl_options = {'REGISTER', 'UNDO'}
 
-	fullScene = BoolProperty(name="Full Scene", default=True, description="Check wether the view is blocked by objects in the scene.")
-	distWeight = BoolProperty(name="Distance Weight", default=True, description="Give less weight to vertices further away from the camera.")
-	addModifier = BoolProperty(name="Add Modifier", default=True, description="Add a vertex weight modifier for additional control.")
-	margin = FloatProperty(name="Camera Margin", default=0.0, description="Add extra margin to the visual area from te camera (might be negative as well).")
+	fullScene: BoolProperty(name="Full Scene", default=True, description="Check wether the view is blocked by objects in the scene.")
+	distWeight: BoolProperty(name="Distance Weight", default=True, description="Give less weight to vertices further away from the camera.")
+	addModifier: BoolProperty(name="Add Modifier", default=True, description="Add a vertex weight modifier for additional control.")
+	margin: FloatProperty(name="Camera Margin", default=0.0, description="Add extra margin to the visual area from te camera (might be negative as well).")
 
 	@classmethod
 	def poll(self, context):
 		p = (context.mode == 'PAINT_WEIGHT' and
-			isinstance(context.scene.objects.active, bpy.types.Object) and
-			isinstance(context.scene.objects.active.data, bpy.types.Mesh))
+			isinstance(context.active_object, bpy.types.Object) and
+			isinstance(context.active_object.data, bpy.types.Mesh))
 		return p
 		
 	def execute(self, context):
@@ -82,9 +82,9 @@ class VisibleVertices(bpy.types.Operator):
 		cam_ob = scene.camera
 		cam = bpy.data.cameras[cam_ob.name] # camera in scene is object type, not a camera type
 		cam_mat = cam_ob.matrix_world
-		view_frame = cam.view_frame(scene)	# without a scene the aspect ratio of the camera is not taken into account
-		view_frame = [cam_mat * v for v in view_frame]
-		cam_pos = cam_mat * Vector((0,0,0))
+		view_frame = cam.view_frame(scene=scene)	# without a scene the aspect ratio of the camera is not taken into account
+		view_frame = [cam_mat @ v for v in view_frame]
+		cam_pos = cam_mat @ Vector((0,0,0))
 		view_center = sum(view_frame, Vector((0,0,0)))/len(view_frame)
 		view_normal = (view_center - cam_pos).normalized()
 
@@ -97,7 +97,7 @@ class VisibleVertices(bpy.types.Operator):
 		max_distance = 0
 		min_distance = None
 		for v in mesh.vertices:
-			vertex_coords = mesh_mat * v.co
+			vertex_coords = mesh_mat @ v.co
 			d = None
 			intersection = intersect_ray_quad_3d(view_frame, vertex_coords, cam_pos) # check intersection with the camera frame
 			#print(intersection, end=" | ")
@@ -106,7 +106,7 @@ class VisibleVertices(bpy.types.Operator):
 				if d.dot(view_normal) < 0: # only take into account vertices in front of the camera, not behind it.
 					d = d.length
 					if self.fullScene:
-						if intersect_ray_scene(scene, vertex_coords, cam_pos):	# check intersection with all other objects in scene. We revert the direction, ie. look from the camera to avoid self intersection
+						if intersect_ray_scene(scene, context.view_layer, vertex_coords, cam_pos):	# check intersection with all other objects in scene. We revert the direction, ie. look from the camera to avoid self intersection
 							d = None
 				else:
 					d = None
@@ -139,7 +139,7 @@ class VisibleVertices(bpy.types.Operator):
 		bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
 		bpy.ops.object.mode_set(mode='EDIT')
 		bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
-		context.scene.update()
+		context.view_layer.update()
 		
 		if self.addModifier:
 			bpy.ops.object.modifier_add(type='VERTEX_WEIGHT_EDIT')
@@ -162,13 +162,13 @@ def menu_func(self, context):
 
 
 def register():
-	bpy.utils.register_module(__name__)
+	bpy.utils.register_class(VisibleVertices)
 	bpy.types.VIEW3D_MT_paint_weight.append(menu_func)
 
 
 def unregister():
 	bpy.types.VIEW3D_MT_paint_weight.remove(menu_func)
-	bpy.utils.unregister_module(__name__)
+	bpy.utils.unregister_class(VisibleVertices)
 
 if __name__ == "__main__":
 	register()
