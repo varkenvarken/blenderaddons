@@ -218,3 +218,4 @@ pip-log.txt
 /cm-op.b64
 /createmesh-gpl .py
 /createmesh-op .py
+*.blend1
