@@ -31,7 +31,7 @@ import numpy as np
 
 scene = bpy.context.scene
 
-lamps = [ob for ob in scene.objects if ob.type == 'LAMP']
+lamps = [ob for ob in scene.objects if ob.type == 'LIGHT']
 
 intensity = 10  # intensity for all lamps
 eps = 1e-5      # small offset to prevent self intersection for secondary rays
@@ -53,7 +53,7 @@ for y in range(1024):
         dir = (-1, (x-512)/1024, (y-512)/1024)
         
         # cast a ray into the scene
-        hit, loc, normal, index, ob, mat = scene.ray_cast(origin, dir)
+        hit, loc, normal, index, ob, mat = scene.ray_cast(bpy.context.view_layer, origin, dir)
         
         # the default background is black for now
         color = np.zeros(3)
@@ -68,7 +68,7 @@ for y in range(1024):
                 
                 # cast a ray in the direction of the light starting
                 # at the original hit location
-                lhit, lloc, lnormal, lindex, lob, lmat = scene.ray_cast(loc+light_dir*eps, light_dir)
+                lhit, lloc, lnormal, lindex, lob, lmat = scene.ray_cast(bpy.context.view_layer, loc+light_dir*eps, light_dir)
                 
                 # if we hit something we are in the shadow of the light
                 if not lhit:
