@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  PLaneFit, (c) 2017,2018 Michel Anders (varkenvarken)
+#  PLaneFit, (c) 2017,2018,2020 Michel Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -21,8 +21,8 @@
 bl_info = {
     "name": "PlaneFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201805050933),
-    "blender": (2, 79, 0),
+    "version": (0, 0, 202010041433),
+    "blender": (2, 83, 0),
     "location": "Edit mode 3d-view, Add-->PlaneFit",
     "description": "Add a plane that best fits a collection of selected vertices",
     "warning": "",
@@ -56,8 +56,8 @@ class PlaneFit(bpy.types.Operator):
 	bl_label = 'PlaneFit'
 	bl_options = {'REGISTER', 'UNDO'}
 
-	size = bpy.props.FloatProperty(name="Size", description="Size of the plane", default=1, min=0, soft_max=10)
-	separate = bpy.props.BoolProperty(name="Separate", description="Generate the plane as a separate object", default=False)
+	size : bpy.props.FloatProperty(name="Size", description="Size of the plane", default=1, min=0, soft_max=10)
+	separate : bpy.props.BoolProperty(name="Separate", description="Generate the plane as a separate object", default=False)
 
 	@classmethod
 	def poll(self, context):
@@ -83,7 +83,7 @@ class PlaneFit(bpy.types.Operator):
 					me = context.active_object.data
 					for vi,co in zip(me.polygons[0].vertices, [ctr+dx*self.size, ctr+dy*self.size, ctr-dx*self.size, ctr-dy*self.size]):
 						me.vertices[vi].co = co
-					context.scene.objects.active = ob
+					context.view_layer.objects.active = ob
 				else:
 					# can't use mesh.from_pydata here because that won't let us ADD to a mesh
 					me.vertices.add(4)
@@ -111,12 +111,12 @@ def menu_func(self, context):
 						icon='PLUGIN').separate=True
 
 def register():
-	bpy.utils.register_module(__name__)
-	bpy.types.INFO_MT_mesh_add.append(menu_func)
+	bpy.utils.register_class(PlaneFit)
+	bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
 
 def unregister():
-	bpy.types.INFO_MT_mesh_add.remove(menu_func)
-	bpy.utils.unregister_module(__name__)
+	bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
+	bpy.utils.unregister_class(PlaneFit)
 
 if __name__ == "__main__":
 	register()
