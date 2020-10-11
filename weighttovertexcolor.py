@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  weighttovertexcolor.py , a Blender addon to transfer weights to vertex colors and vice versa.
-#  (c) 2015 Michel J. Anders (varkenvarken)
+#  (c) 2015,2020 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
     "name": "WeightToVertexColor",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20200918),
-    "blender": (2, 83, 0),
+    "version": (0, 0, 202010111554),
+    "blender": (2, 90, 0),
     "location": "View3D > Weight Paint > Weights > WeightToVertexColor\nView3D > Vertex Paint > Paint > VertexColorToWeight",
     "description": "Transfer weights or colors between the active vertex group/ vertex color map.",
     "warning": "",
@@ -71,16 +71,17 @@ class VertexColorToWeight(bpy.types.Operator):
     bl_idname = "mesh.vertexcolortoweight"
     bl_label = "VertexColorToWeight"
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Convert active vertex color layer to weights"
 
     channel : EnumProperty (name="Channel", description="Channel to use as weight", items=[('R','Red','Red'),('G','Green','Green'),('B','Blue','Blue'),('M','All (Monochrome)','All (Monochrome)')])
-    
+
     @classmethod
     def poll(self, context):
         """
         Only visible in weight paint mode if the active object is a mesh.
         """
         p = (context.mode == 'PAINT_WEIGHT' and
-            isinstance(bpy.context.active_object.data, bpy.types.Object) and
+            isinstance(bpy.context.active_object, bpy.types.Object) and
             isinstance(bpy.context.active_object.data, bpy.types.Mesh))
         return p
 
@@ -90,14 +91,13 @@ class VertexColorToWeight(bpy.types.Operator):
         scene = bpy.context.scene
         layer = bpy.context.view_layer
         self.ob = bpy.context.active_object
-        mesh = bpy.context.active_object
+        mesh = bpy.context.active_object.data
 
         # select the active vertex group or create one if it does not exist yet
         vertex_group = self.ob.vertex_groups.active
         if vertex_group is None:
             bpy.ops.object.vertex_group_add()
             vertex_group = self.ob.vertex_groups.active
-        scene = bpycontext.scene
 
         # select the active vertex color layer or create one if it does not exist yet
         if mesh.vertex_colors.active is None:
@@ -110,24 +110,25 @@ class VertexColorToWeight(bpy.types.Operator):
             vi = loop.vertex_index
             if vi not in colors :
                 # have to copy here, otherwise we would refer to an immutable copy and additions would silently fail
-                colors[vi] = Color(vertex_colors[loop.index].color)
+                # also, we convert to Vector because Color is always 3 elements and a vertex color is now 4 elements
+                colors[vi] = Vector(vertex_colors[loop.index].color[:3])
                 corners[vi] = 1.0
             else:
-                colors[vi] += vertex_colors[loop.index].color
+                colors[vi] += Vector(vertex_colors[loop.index].color[:3])
                 corners[vi]+= 1.0
         if self.channel == 'R':
             for vindex in colors:           
-                vertex_group.add([vindex], colors[vindex].r/corners[vindex], 'REPLACE')
+                vertex_group.add([vindex], colors[vindex].x/corners[vindex], 'REPLACE')
         elif self.channel == 'G':
             for vindex in colors:           
-                vertex_group.add([vindex], colors[vindex].g/corners[vindex], 'REPLACE')
+                vertex_group.add([vindex], colors[vindex].y/corners[vindex], 'REPLACE')
         elif self.channel == 'B':
             for vindex in colors:           
-                vertex_group.add([vindex], colors[vindex].b/corners[vindex], 'REPLACE')
+                vertex_group.add([vindex], colors[vindex].z/corners[vindex], 'REPLACE')
         else:
             for vindex in colors:           
                 vertex_group.add([vindex], sum(colors[vindex]/corners[vindex])/3.0, 'REPLACE')
-        
+
         bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
@@ -135,16 +136,17 @@ class VertexColorToWeight(bpy.types.Operator):
         layer.update()
 
         update_particle_systems(self.ob, vertex_group)
-        
+
         return {'FINISHED'}
 
 class WeightToVertexColor(bpy.types.Operator):
     bl_idname = "mesh.weighttovertexcolor"
     bl_label = "WeightToVertexColor"
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Convert active vertex group to colors"
 
     channel : EnumProperty (name="Channel", description="Channel to transfer weight to", items=[('R','Red','Red'),('G','Green','Green'),('B','Blue','Blue'),('M','All (Monochrome)','All (Monochrome)')])
-    
+
     @classmethod
     def poll(self, context):
         """
@@ -176,26 +178,28 @@ class WeightToVertexColor(bpy.types.Operator):
         vertex_colors = mesh.vertex_colors.active.data
 
         for loop in mesh.loops:
-            weight = vertex_group.weight(loop.vertex_index)
+            try:
+                weight = vertex_group.weight(loop.vertex_index)
+            except RuntimeError:
+                weight = 0  # missing index
             if self.channel == 'R':
-                vertex_colors[loop.index].color = Color((weight, 0, 0))
+                vertex_colors[loop.index].color = (weight, 0, 0, 1)
             elif self.channel == 'G':
-                vertex_colors[loop.index].color = Color((0, weight, 0))
+                vertex_colors[loop.index].color = (0, weight, 0, 1)
             elif self.channel == 'B':
-                vertex_colors[loop.index].color = Color((0, 0, weight))
+                vertex_colors[loop.index].color = (0, 0, weight, 1)
             else:
-                vertex_colors[loop.index].color = Color((weight, weight, weight))
-        
+                vertex_colors[loop.index].color = (weight, weight, weight, 1)
+
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.object.mode_set(mode='VERTEX_PAINT')
-        scene.update()
-        
+
         update_particle_systems(self.ob, vertex_group)
-        
+
         return {'FINISHED'}
 
-            
+
 def menu_func_weight(self, context):
     self.layout.operator(VertexColorToWeight.bl_idname, text="VertexColorToWeight",
                         icon='PLUGIN')
