@@ -1,6 +1,6 @@
 #  reportpanel.py
 #
-#  (c) 2017 Michel Anders
+#  (c) 2017,2021 Michel Anders
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -26,10 +26,10 @@ from time import sleep
 bl_info = {
     "name": "Report Panel",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201704080956),
-    "blender": (2, 78, 0),
+    "version": (0, 0, 202105091029),
+    "blender": (2, 92, 0),
     "location": "Info header",
-    "description": "Puts a progress indicator the info header region",
+    "description": "Puts a progress indicator the view3d header region",
     "warning": "",
     "wiki_url": "",
     "tracker_url": "",
@@ -78,7 +78,7 @@ class TestProgressModal(bpy.types.Operator):
         context.scene.progress_indicator_text = "Heavy modal job"
         context.scene.progress_indicator = 0
         wm = context.window_manager
-        self.timer = wm.event_timer_add(1.0, context.window)
+        self.timer = wm.event_timer_add(1.0, window=context.window)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
@@ -88,13 +88,18 @@ def menu_func(self, context):
 
 # update function to tag all info areas for redraw
 def update(self, context):
+    print('update')
     areas = context.window.screen.areas
     for area in areas:
-        if area.type == 'INFO':
+        if area.type == 'VIEW_3D':
             area.tag_redraw()
 
 # a variable where we can store the original draw funtion
 info_header_draw = lambda s,c: None
+
+classes = [TestProgress, TestProgressModal]
+
+register_classes, unregister_classes = bpy.utils.register_classes_factory(classes)
 
 def register():
     # a value between [0,100] will show the slider
@@ -115,13 +120,14 @@ def register():
 
     # save the original draw method of the Info header
     global info_header_draw
-    info_header_draw = bpy.types.INFO_HT_header.draw
+    info_header_draw = bpy.types.VIEW3D_HT_tool_header.draw
 
     # create a new draw function
     def newdraw(self, context):
         global info_header_draw
         # first call the original stuff
         info_header_draw(self, context)
+        print('newdraw')
         # then add the prop that acts as a progress indicator
         if (context.scene.progress_indicator >= 0 and
             context.scene.progress_indicator <= 100) :
@@ -133,16 +139,15 @@ def register():
                                 slider=True)
 
     # replace it
-    bpy.types.INFO_HT_header.draw = newdraw
+    bpy.types.VIEW3D_HT_tool_header.draw = newdraw
 
     # regular registration stuff
-    bpy.utils.register_module(__name__)
+    register_classes()
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 
 def unregister():
     bpy.types.VIEW3D_MT_object.remove(menu_func)
-    bpy.utils.unregister_module(__name__)
     global info_header_draw
-    bpy.types.INFO_HT_header.draw = info_header_draw
-
+    bpy.types.VIEW3D_HT_tool_header.draw = info_header_draw
+    unregister_classes()
