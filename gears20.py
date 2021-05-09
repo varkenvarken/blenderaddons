@@ -25,7 +25,7 @@ bl_info = {
     "name": "Gears 2.0",
     "author": "Michel Anders (varkenvarken)",
     "version": (0, 0, 7),
-    "blender": (2, 73, 0),
+    "blender": (2, 91, 0),
     "location": "View3D > Add > Mesh",
     "description": "Adds a mesh representing a gear (cogwheel)",
     "warning": "",
@@ -183,8 +183,8 @@ def rootArc(object):
 
 def focus(object, context):
     bpy.ops.object.select_all(action='DESELECT')
-    object.select = True
-    context.scene.objects.active = object
+    object.select_set(True)
+    context.view_layer.objects.active = object
 
 
 def relradius(rootr, nt, nrt):
@@ -275,7 +275,7 @@ def parentToEmpty(gears, empty, context):
         g.parent = empty
         #g.matrix_world = mat
     if newempty:
-        empty.location = context.scene.cursor_location
+        empty.location = context.scene.cursor.location
 
 
 def clearDriversAndKeys(gears, context):
@@ -609,10 +609,18 @@ class GearConvert(bpy.types.Operator):
 
 
 def register():
-    bpy.utils.register_module(__name__)
-    bpy.types.INFO_MT_mesh_add.append(menu_func)
+    bpy.utils.register_class(GearAdd)
+    bpy.utils.register_class(Gears)
+    bpy.utils.register_class(GearConvert)
+    bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
 
 
 def unregister():
-    bpy.types.INFO_MT_mesh_add.remove(menu_func)
-    bpy.utils.unregister_module(__name__)
+    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
+    bpy.utils.unregister_class(GearAdd)
+    bpy.utils.unregister_class(Gears)
+    bpy.utils.unregister_class(GearConvert)
+
+
+if __name__ == "__main__":
+    register()
