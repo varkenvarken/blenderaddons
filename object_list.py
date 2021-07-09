@@ -22,7 +22,7 @@
 bl_info = {
     "name": "ObjectList",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 202107011122),
+    "version": (0, 0, 202107090943),
     "blender": (2, 93, 0),
     "location": "View3D > Object > Object List",
     "description": "create a comma separated list with object info",
@@ -32,10 +32,22 @@ bl_info = {
     "category": "Object"}
 
 import bpy
+import bmesh
 
 def object_list(context):
+    bm = bmesh.new()
+    depsgraph = context.view_layer.depsgraph
     for ob in context.scene.objects:
-        yield ob.name, ob.type, ob.data.name if ob.data else None, ",".join(c.name for c in ob.users_collection)
+        tris, faces, edges, verts = 0,0,0,0
+        if ob.type == 'MESH':
+            bm.from_object(ob, depsgraph, face_normals=False)
+            tris = len(bm.calc_loop_triangles())
+            verts = len(bm.verts)
+            edges = len(bm.edges)
+            faces = len(bm.faces)
+        yield ob.name, ob.type, tris, faces, edges, verts, ob.data.name if ob.data else None, ob.data.users if ob.data else 1, ",".join(c.name for c in ob.users_collection)
+        bm.clear()
+    bm.free()
 
 class ObjectList(bpy.types.Operator):
     bl_idname = "object.object_list"
@@ -44,7 +56,7 @@ class ObjectList(bpy.types.Operator):
 
     def execute(self, context):
         t = bpy.data.texts.new(name="Object list.csv")
-        t.write(",".join(("Name","Type","Datablock name","Collection 1","Collection 2","Collection 3")))
+        t.write(",".join(("Name","Type","Tris", "Faces", "Edges", "Verts", "Datablock name","Users", "Collection 1","Collection 2","Collection 3")))
         t.write("\n")
         for ob in object_list(bpy.context):
             t.write(",".join(map(str,ob)))
@@ -54,7 +66,7 @@ class ObjectList(bpy.types.Operator):
 
 def menu_func(self, context):
     self.layout.operator(ObjectList.bl_idname, text="Create a comma separated list with object info",
-                        icon='CURVE_BEZCURVE')
+                        icon='INFO')
 
 
 classes = (ObjectList, )
