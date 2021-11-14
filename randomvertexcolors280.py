@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Random vertex colors, a Blender addon
-#  (c) 2013,2019 Michel J. Anders (varkenvarken)
+#  (c) 2013,2019,2021 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,6 +22,7 @@
 # a special thank you to Linus Yng and @ambi for their feedback on the
 # numpy related changes.
 
+# Note that the filename is a misnomer: this addon works with 2.93 LTS
 
 from random import random
 import bpy
@@ -34,8 +35,8 @@ import numpy as np
 bl_info = {
 	"name": "Random vertex colors",
 	"author": "michel anders (varkenvarken)",
-	"version": (0, 0, 201904081105),
-	"blender": (2, 80, 0),
+	"version": (0, 0, 202111141608),
+	"blender": (2, 93, 0),
 	"location": "View3D > Paint > Add random vertex colors",
 	"description": "Add random vertex colors to individual faces.",
 	"warning": "",
@@ -54,8 +55,8 @@ class RandomVertexColors(bpy.types.Operator):
 	def poll(self, context):
 		# Check if we have a mesh object active and are in vertex paint mode
 		p = (context.mode == 'PAINT_VERTEX' and
-			 isinstance(context.scene.objects.active, bpy.types.Object) and
-			 isinstance(context.scene.objects.active.data, bpy.types.Mesh))
+			 isinstance(context.active_object, bpy.types.Object) and
+			 isinstance(context.active_object.data, bpy.types.Mesh))
 		return p
 
 	def execute(self, context):
@@ -94,7 +95,7 @@ class RandomVertexColors(bpy.types.Operator):
 		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
 		bpy.ops.object.mode_set(mode='EDIT')
 		bpy.ops.object.mode_set(mode='VERTEX_PAINT')
-		context.scene.update()
+		context.view_layer.update()
 		return {'FINISHED'}
 
 
