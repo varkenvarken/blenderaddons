@@ -6,7 +6,6 @@
 /createmesh-gpl .py
 /createmesh-op .py
 *.blend1
-prometheus/prometheus_client/
 *.pyc
 tasks.json
 prometheus.zip
