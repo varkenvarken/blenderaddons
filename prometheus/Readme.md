@@ -1,3 +1,7 @@
+
+!!! Deprecated. This add-on has moved to its own repo: https://github.com/varkenvarken/blender-prometheus
+
+
 # A Prometheus add-on for Blender
 
 Exposes [Prometheus](https://prometheus.io/) metrics on port 8000 when enabled.
