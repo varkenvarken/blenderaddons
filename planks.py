@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Floor Generator, a Blender addon
-#  (c) 2013 - 2019 Michel J. Anders (varkenvarken)
+#  (c) 2013 - 2023 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 201907310916),
+	"version": (0, 0, 202308030700),
 	"blender": (2, 80, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -548,9 +548,20 @@ def updateMesh(self, context):
 
 	# add uv-coords and per face random vertex colors
 	rot = Euler((0,0,o.uvrotation))
-	mesh.uv_layers.new()
-	uv_layer = mesh.uv_layers.active.data
-	vertex_colors = mesh.vertex_colors.new().data
+	
+	# we needed to rearrange the way we create the two layers
+	# apparently creating two new layers swaps them around and
+	# we crash hard with an access violation. See
+	# https://projects.blender.org/blender/blender/issues/107500
+	# we now create both layers first and remember their names,
+	# and then create references to their data *after* creating them
+	# that seems to work.
+
+	uv_name = mesh.uv_layers.new().name
+	vc_name = mesh.vertex_colors.new().name
+	uv_layer = mesh.uv_layers[uv_name].data
+	vertex_colors = mesh.vertex_colors[vc_name].data
+
 	offset = Vector()
 	# note that the uvs that are returned are shuffled
 	for poly in mesh.polygons:
