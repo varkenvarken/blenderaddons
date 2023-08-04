@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 202308030700),
+	"version": (0, 0, 20230804115701),
 	"blender": (2, 80, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -1100,8 +1100,8 @@ class FloorBoards(bpy.types.Panel):
 
 	def draw(self, context):
 		layout = self.layout
-		if bpy.context.mode != 'OBJECT':
-			layout.label(text='Floorgenerator only works in OBJECT mode.')
+		if bpy.context.mode != 'OBJECT' or context.active_object is None:
+			layout.label(text='Floorgenerator only works on an active object in OBJECT mode.')
 		else:
 			o = context.object
 			if 'reg' in o:
