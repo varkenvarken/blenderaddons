@@ -20,6 +20,9 @@
 
 # we cannot select faces from a defined facemap (yet), see
 # https://projects.blender.org/blender/blender/issues/105317
+# therefore I created this tine add-on.
+# It adds two options to the Select menu in mesh edit mode:
+# From facemap and Create facemap.
 
 bl_info = {
     "name": "FacemapSelect",
@@ -29,7 +32,7 @@ bl_info = {
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
     "warning": "",
-    "wiki_url": "",
+    "wiki_url": "https://github.com/varkenvarken/blenderaddons",
     "category": "Mesh",
 }
 
