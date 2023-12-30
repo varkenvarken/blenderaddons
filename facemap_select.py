@@ -56,7 +56,8 @@ class FacemapSelect(bpy.types.Operator):
         )
 
     def execute(self, context):
-        bpy.ops.mesh.select_all(action="DESELECT")
+        if not self.__shift:
+            bpy.ops.mesh.select_all(action="DESELECT")
         attribute_name = context.active_object.data.attributes.active.name
         bpy.ops.object.editmode_toggle()
         for polygon, facemap_attribute in zip(
@@ -66,7 +67,10 @@ class FacemapSelect(bpy.types.Operator):
             polygon.select = facemap_attribute.value
         bpy.ops.object.editmode_toggle()
         return {"FINISHED"}
-
+    
+    def invoke(self, context, event):
+        self.__shift = event.shift
+        return self.execute(context)
 
 class FacemapCreate(bpy.types.Operator):
     bl_idname = "mesh.facemap_create"
