@@ -26,8 +26,8 @@
 
 bl_info = {
     "name": "FacemapSelect",
-    "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20231014152157),
+    "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter)",
+    "version": (0, 0, 20231230140402),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -39,10 +39,13 @@ bl_info = {
 
 import bpy
 
+
 class FacemapSelect(bpy.types.Operator):
     bl_idname = "mesh.facemap_select"
     bl_label = "FacemapSelect"
-    bl_description = "Select faces based on active facemap"
+    bl_description = (
+        "Select faces based on active facemap (+ Shift add to current selection)"
+    )
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -56,22 +59,31 @@ class FacemapSelect(bpy.types.Operator):
         )
 
     def execute(self, context):
-        bpy.ops.mesh.select_all(action="DESELECT")
+        if not self.__shift:
+            bpy.ops.mesh.select_all(action="DESELECT")
         attribute_name = context.active_object.data.attributes.active.name
         bpy.ops.object.editmode_toggle()
         for polygon, facemap_attribute in zip(
             context.active_object.data.polygons,
             context.active_object.data.attributes[attribute_name].data,
         ):
-            polygon.select = facemap_attribute.value
+            polygon.select |= (
+                facemap_attribute.value
+            )  # keeps polygons selected that already were
         bpy.ops.object.editmode_toggle()
         return {"FINISHED"}
+
+    def invoke(self, context, event):
+        self.__shift = event.shift
+        return self.execute(context)
 
 
 class FacemapCreate(bpy.types.Operator):
     bl_idname = "mesh.facemap_create"
     bl_label = "FacemapCreate"
-    bl_description = "Create a new boolean face map and set value according to current selection"
+    bl_description = (
+        "Create a new boolean face map and set value according to current selection"
+    )
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
