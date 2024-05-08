@@ -22,7 +22,7 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 20240508114800),
+	"version": (0, 0, 20240508164800),
 	"blender": (4, 1, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
@@ -264,7 +264,63 @@ def herringbone(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, r
 		
 	fuvs = [v for p in uvs for v in p]
 	return verts, faces, fuvs
+
+def chevron(rows, cols, planklength, plankwidth, longgap, shortgap, nseed, randrotx, randroty, randrotz, originx, originy):
+	verts = []
+	faces = []
+	uvs = []
 	
+	seed(nseed)
+	
+	ll=0
+	longside = (planklength-shortgap)/sqrt(2.0)
+	shortside = (plankwidth-longgap)/sqrt(2.0)
+	vstep = Vector((0,plankwidth * sqrt(2.0),0))
+	hstepl = Vector((planklength * sqrt(2.0),0,0))
+	hstep = Vector((planklength/sqrt(2.0)-(plankwidth-longgap)/sqrt(2.0),planklength/sqrt(2.0)+(plankwidth-longgap)/sqrt(2.0),0))
+	
+	dy = Vector((0,-planklength/sqrt(2.0),0))
+	
+	pu = [Vector((0,0,0)),Vector((longside,0,0)),Vector((longside+shortside,shortside,0)),Vector((shortside,shortside,0))]
+	
+	pv = [Vector((0,0,0)),Vector((longside,longside,0)),Vector((longside,longside+2*shortside,0)),Vector((0,2*shortside,0))]
+
+	rot = Euler((0,0,-PI/2),"XYZ")
+	pvm = [Vector((-v.x, v.y, v.z)) for v in pv]
+	
+	midpointpv = sum(pv,Vector())/4.0
+	midpointpvm = sum(pvm,Vector())/4.0
+
+	o = Vector((-originx, -originy, 0))
+	midpointpvo = midpointpv - o
+	midpointpvmo = midpointpvm - o
+
+	for col in range(cols):
+		for row in range(rows):
+			# CLEANUP: this could be shorter: for P in pv,pvm 
+			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
+			pvo = [ v + o for v in pv]
+			pverts = [rotate(v - midpointpvo, rot) + midpointpvo  + row * vstep + col * hstepl + dy for v in pvo]
+			verts.extend(deepcopy(pverts))
+			uvs.append([v + Vector((col*2*longside,row*shortside,0)) for v in pu])
+			faces.append((ll, ll + 1, ll + 2, ll + 3))
+			ll = len(verts)
+			rot = Euler((randrotx * randuni(-1, 1), randroty * randuni(-1, 1), randrotz * randuni(-1, 1)), 'XYZ')
+			pvmo = [ v + o for v in pvm]
+			pverts = [rotate(v - midpointpvmo, rot) + midpointpvmo  + row * vstep + col * hstepl + dy for v in pvmo]
+			verts.extend(deepcopy(pverts))
+			uvs.append([v + Vector(((1+col*2)*longside,row*shortside,0)) for v in pu])
+			faces.append((ll, ll + 1, ll + 2, ll + 3))
+			ll = len(verts)
+	
+	for i in range(len(uvs)):
+		pp1 = randrange(len(uvs))
+		pp2 = randrange(len(uvs))
+		swap(uvs,pp1,pp2)
+		
+	fuvs = [v for p in uvs for v in p]
+	return verts, faces, fuvs
+
 def square(rows, cols, planklength, n, border, longgap, shortgap, nseed, randrotx, randroty, randrotz, originx, originy):
 	verts = []
 	verts2 = []
@@ -502,6 +558,18 @@ def updateMesh(self, context):
 		nplanks = int((o.width+o.planklength + o.originy*2) / v)+1
 		nplanksc = int((o.length + o.originx*2) / w)+1
 		verts, faces, uvs = herringbone(nplanks, nplanksc,
+												o.planklength, o.plankwidth,
+												o.longgap, o.shortgap,
+												o.randomseed,
+												o.randrotx, o.randroty, o.randrotz,
+												o.originx, o.originy)
+	elif o.pattern == 'Chevron':
+		# note that there is a lot of extra length and width here to make sure that  we create a pattern w.o. gaps at the edges
+		v = o.plankwidth * sqrt(2.0)
+		w = o.planklength * sqrt(2.0)
+		nplanks = int((o.width+o.planklength + o.originy*2) / v)+1
+		nplanksc = int((o.length + o.originx*2) / w)+1
+		verts, faces, uvs = chevron(nplanks, nplanksc,
 												o.planklength, o.plankwidth,
 												o.longgap, o.shortgap,
 												o.randomseed,
@@ -1085,7 +1153,8 @@ bpy.types.Object.pattern = EnumProperty(name="Pattern",
 									items = [('Regular','Regular','Parallel planks'),
 									         ('Herringbone','Herringbone','Herringbone pattern'),
 											 ('Square','Square','Alternating square pattern'),
-											 ('Versaille','Versaille','Diagonal weave like pattern')],
+											 ('Versaille','Versaille','Diagonal weave like pattern'),
+											 ('Chevron','Chevron','Chevron pattern')],
 									update=updateMesh)
 
 bpy.types.Object.borderswitch = BoolProperty(name="Switch border",
@@ -1122,7 +1191,7 @@ class FloorBoards(bpy.types.Panel):
 					columns.prop(o, 'originy')
 
 					box.label(text='Planks')
-					if o.pattern in { 'Herringbone', 'Square', 'Versaille'}:
+					if o.pattern in { 'Herringbone', 'Square', 'Versaille', 'Chevron'}:
 						box.prop(o, 'planklength')
 						if o.pattern == 'Square':
 							box.prop(o, 'nsquare')
