@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Floor Generator, a Blender addon
-#  (c) 2013 - 2023 Michel J. Anders (varkenvarken)
+#  (c) 2013 - 2024 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,8 +22,8 @@
 bl_info = {
 	"name": "Floor Generator",
 	"author": "Michel Anders (varkenvarken) with contributions from Alain, Floric and Lell. The idea to add patterns is based on Cedric Brandin's (clarkx) parquet addon",
-	"version": (0, 0, 20230804115701),
-	"blender": (2, 80, 0),
+	"version": (0, 0, 20240508114800),
+	"blender": (4, 1, 0),
 	"location": "View3D > Add > Mesh",
 	"description": "Adds a mesh representing floor boards (planks)",
 	"warning": "",
@@ -696,8 +696,8 @@ def updateMesh(self, context):
 	open_edges = [e for e in bm.edges if len(e.link_faces)==1]
 	bmesh.ops.edgeloop_fill(bm, edges=open_edges, mat_nr=0, use_smooth=False)
 
-	creases = bm.edges.layers.crease.active
-	if creases is not None:
+	if 'crease_edge' in bm.edges.layers.float:
+		creases = bm.edges.layers.float['crease_edge']
 		for edge in open_edges:
 			edge[creases] = 1
 
@@ -783,9 +783,12 @@ def updateMesh(self, context):
 			mods[0].show_expanded = False
 			#mods[1].show_expanded = False
 			mods[0].width = self.bevel
+			mods[0].offset_type = 'PERCENT'
+			mods[0].width_pct = 0.5
 			mods[0].segments = 2
 			mods[0].limit_method = 'ANGLE'
 			mods[0].angle_limit = (85/90.0)*PI/2
+			mods[0].harden_normals = True
 		if warped and not ('SUBSURF' in [m.type for m in mods]):
 			bpy.ops.object.modifier_add(type='SUBSURF')
 			mods[-1].show_expanded = False
