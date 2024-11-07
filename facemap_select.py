@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107143407),
+    "version": (0, 0, 20241107144005),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -38,44 +38,6 @@ bl_info = {
 
 import bpy
 from bpy.types import Panel, UIList
-
-
-class FacemapSelect(bpy.types.Operator):
-    bl_idname = "mesh.facemap_select"
-    bl_label = "FacemapSelect"
-    bl_description = (
-        "Select faces based on active facemap (+ Shift add to current selection)"
-    )
-    bl_options = {"REGISTER", "UNDO"}
-
-    @classmethod
-    def poll(self, context):
-        return (
-            context.mode == "EDIT_MESH"
-            and context.active_object.type == "MESH"
-            and context.active_object.data.attributes.active is not None
-            and context.active_object.data.attributes.active.domain == "FACE"
-            and context.active_object.data.attributes.active.data_type == "BOOLEAN"
-        )
-
-    def execute(self, context):
-        if not self.__shift:
-            bpy.ops.mesh.select_all(action="DESELECT")
-        attribute_name = context.active_object.data.attributes.active.name
-        bpy.ops.object.editmode_toggle()
-        for polygon, facemap_attribute in zip(
-            context.active_object.data.polygons,
-            context.active_object.data.attributes[attribute_name].data,
-        ):
-            polygon.select |= (
-                facemap_attribute.value
-            )  # keeps polygons selected that already were
-        bpy.ops.object.editmode_toggle()
-        return {"FINISHED"}
-
-    def invoke(self, context, event):
-        self.__shift = event.shift
-        return self.execute(context)
 
 
 class FacemapCreate(bpy.types.Operator):
@@ -168,7 +130,7 @@ class FacemapSelections(bpy.types.Operator):
                             poly.select = True
                         if self.param == "Deselect":
                             poly.select = False
-            else: # set the selection (deselect act the same regardless whether shift is pressed)
+            else:  # set the selection (deselect act the same regardless whether shift is pressed)
                 for poly in obj.data.polygons:
                     if self.param == "Select":
                         poly.select = attribute.data[poly.index].value
@@ -186,7 +148,8 @@ class FacemapSelections(bpy.types.Operator):
     def invoke(self, context, event):
         self.__shift = event.shift
         return self.execute(context)
-    
+
+
 class FMS_OT_facemap_delete(bpy.types.Operator):
     bl_idname = "fms.facemap_delete"
     bl_label = "FacemapDelete"
@@ -310,14 +273,7 @@ class DATA_PT_face_maps(Panel):
             sub.operator("mesh.facemap_selections", text="Deselect").param = "Deselect"
 
 
-def menu_func(self, context):
-    self.layout.separator()
-    self.layout.operator(FacemapSelect.bl_idname, text="From facemap")
-    self.layout.operator(FacemapCreate.bl_idname, text="Create facemap")
-
-
 classes = [
-    FacemapSelect,
     FacemapCreate,
     FMS_OT_facemap_delete,
     FacemapAssign,
@@ -328,7 +284,6 @@ classes = [
 
 
 classes = [
-    FacemapSelect,
     FacemapCreate,
     FMS_OT_facemap_delete,
     FacemapAssign,
@@ -342,14 +297,10 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.VIEW3D_MT_select_edit_mesh.append(menu_func)
-
 
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
-
-    bpy.types.VIEW3D_MT_select_edit_mesh.remove(menu_func)
 
 
 if __name__ == "__main__":
