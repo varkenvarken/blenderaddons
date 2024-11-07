@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  facemap_select, (c) 2023 Michel Anders (varkenvarken)
+#  facemap_select, (c) 2023 Michel Anders (varkenvarken) and contributors.
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -20,14 +20,14 @@
 
 # we cannot select faces from a defined facemap (yet), see
 # https://projects.blender.org/blender/blender/issues/105317
-# therefore I created this tine add-on.
+# therefore I created this tiny add-on.
 # It adds two options to the Select menu in mesh edit mode:
 # From facemap and Create facemap.
 
 bl_info = {
     "name": "FacemapSelect",
-    "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) Tyo79",
-    "version": (0, 0, 20231230140402),
+    "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
+    "version": (0, 0, 20241107130236),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -52,11 +52,11 @@ class FacemapSelect(bpy.types.Operator):
     @classmethod
     def poll(self, context):
         return (
-                context.mode == "EDIT_MESH"
-                and context.active_object.type == "MESH"
-                and context.active_object.data.attributes.active is not None
-                and context.active_object.data.attributes.active.domain == "FACE"
-                and context.active_object.data.attributes.active.data_type == "BOOLEAN"
+            context.mode == "EDIT_MESH"
+            and context.active_object.type == "MESH"
+            and context.active_object.data.attributes.active is not None
+            and context.active_object.data.attributes.active.domain == "FACE"
+            and context.active_object.data.attributes.active.data_type == "BOOLEAN"
         )
 
     def execute(self, context):
@@ -65,8 +65,8 @@ class FacemapSelect(bpy.types.Operator):
         attribute_name = context.active_object.data.attributes.active.name
         bpy.ops.object.editmode_toggle()
         for polygon, facemap_attribute in zip(
-                context.active_object.data.polygons,
-                context.active_object.data.attributes[attribute_name].data,
+            context.active_object.data.polygons,
+            context.active_object.data.attributes[attribute_name].data,
         ):
             polygon.select |= (
                 facemap_attribute.value
@@ -96,21 +96,22 @@ class FacemapCreate(bpy.types.Operator):
         facemap = context.active_object.data.attributes.new(
             name="FaceMap", domain="FACE", type="BOOLEAN"
         )
+
         for polygon in context.active_object.data.polygons:
             facemap.data[polygon.index].value = polygon.select
         bpy.ops.object.editmode_toggle()
 
         attrs = context.object.data.attributes
-        attrs.active = attrs[-1]
-
+        attrs.active = facemap
 
         return {"FINISHED"}
+
 
 class FacemapAssign(bpy.types.Operator):
     bl_idname = "mesh.facemap_assign"
     bl_label = "FacemapAssign"
 
-    param : bpy.props.StringProperty()
+    param: bpy.props.StringProperty()
 
     def execute(self, context):
         obj = context.object
@@ -132,11 +133,12 @@ class FacemapAssign(bpy.types.Operator):
 
         return {"FINISHED"}
 
+
 class FacemapSelections(bpy.types.Operator):
     bl_idname = "mesh.facemap_selections"
     bl_label = "Facemap Selections"
 
-    param : bpy.props.StringProperty()
+    param: bpy.props.StringProperty()
 
     def execute(self, context):
         obj = context.object
@@ -167,9 +169,7 @@ class FacemapSelections(bpy.types.Operator):
 class FMS_OT_facemap_delete(bpy.types.Operator):
     bl_idname = "fms.facemap_delete"
     bl_label = "FacemapDelete"
-    bl_description = (
-        "Delete Active face map "
-    )
+    bl_description = "Delete Active face map "
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -182,34 +182,52 @@ class MESH_UL_fmaps(UIList):
 
     def filter_items(self, context, data, propname):
         items = getattr(data, propname)
-        flt_flags = [self.bitflag_filter_item if item.name.startswith("FaceMap") else 0 for item in items]
+        flt_flags = [
+            self.bitflag_filter_item if item.name.startswith("FaceMap") else 0
+            for item in items
+        ]
         return flt_flags, []
 
-    def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index,):
+    def draw_item(
+        self,
+        _context,
+        layout,
+        _data,
+        item,
+        icon,
+        _active_data,
+        _active_propname,
+        _index,
+    ):
 
         fmap = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(fmap, "name", text="", emboss=False, icon='FACE_MAPS')
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            layout.prop(fmap, "name", text="", emboss=False, icon="FACE_MAPS")
 
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
             layout.label(text="", icon_value=icon)
 
 
 class DATA_PT_face_maps(Panel):
     bl_label = "Face Maps"
-    bl_space_type = 'PROPERTIES'
-    bl_context = 'data'
-    bl_region_type = 'WINDOW'
-    bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
+    bl_space_type = "PROPERTIES"
+    bl_context = "data"
+    bl_region_type = "WINDOW"
+    bl_options = {"DEFAULT_CLOSED"}
+    COMPAT_ENGINES = {
+        "BLENDER_RENDER",
+        "BLENDER_EEVEE",
+        "BLENDER_WORKBENCH",
+        "BLENDER_WORKBENCH_NEXT",
+    }
 
     # param: bpy.props.StringProperty()
 
     @classmethod
     def poll(cls, context):
         obj = context.object
-        return (obj and obj.type == 'MESH')
+        return obj and obj.type == "MESH"
 
     def draw(self, context):
         layout = self.layout
@@ -226,22 +244,30 @@ class DATA_PT_face_maps(Panel):
             rows = 4
 
         row = layout.row()
-        row.template_list("MESH_UL_fmaps", "", ob.data, "attributes", ob.data.attributes, "active_index", rows=rows)
+        row.template_list(
+            "MESH_UL_fmaps",
+            "",
+            ob.data,
+            "attributes",
+            ob.data.attributes,
+            "active_index",
+            rows=rows,
+        )
 
         col = row.column(align=True)
-        col.operator("mesh.facemap_create", icon='ADD', text="")
-        col.operator("fms.facemap_delete", icon='REMOVE', text="")
+        col.operator("mesh.facemap_create", icon="ADD", text="")
+        col.operator("fms.facemap_delete", icon="REMOVE", text="")
 
-        if len(face_maps)>0 and (ob.mode == 'EDIT' and ob.type == 'MESH'):
-           row = layout.row()
+        if len(face_maps) > 0 and (ob.mode == "EDIT" and ob.type == "MESH"):
+            row = layout.row()
 
-           sub = row.row(align=True)
-           sub.operator("mesh.facemap_assign", text="Assign").param = "Assign"
-           sub.operator("mesh.facemap_assign", text="Remove").param = "Remove"
+            sub = row.row(align=True)
+            sub.operator("mesh.facemap_assign", text="Assign").param = "Assign"
+            sub.operator("mesh.facemap_assign", text="Remove").param = "Remove"
 
-           sub = row.row(align=True)
-           sub.operator("mesh.facemap_selections", text="Select").param = "Select"
-           sub.operator("mesh.facemap_selections", text="Deselect").param = "Deselect"
+            sub = row.row(align=True)
+            sub.operator("mesh.facemap_selections", text="Select").param = "Select"
+            sub.operator("mesh.facemap_selections", text="Deselect").param = "Deselect"
 
 
 def menu_func(self, context):
@@ -251,17 +277,13 @@ def menu_func(self, context):
 
 
 classes = [
-
     FacemapSelect,
     FacemapCreate,
-
     FMS_OT_facemap_delete,
     FacemapAssign,
     FacemapSelections,
-
     MESH_UL_fmaps,
     DATA_PT_face_maps,
-
 ]
 
 
