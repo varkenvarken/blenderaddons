@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107132244),
+    "version": (0, 0, 20241107135318),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -197,7 +197,11 @@ class MESH_UL_fmaps(UIList):
     def filter_items(self, context, data, propname):
         items = getattr(data, propname)
         flt_flags = [
-            self.bitflag_filter_item if item.name.startswith("FaceMap") else 0
+            (
+                self.bitflag_filter_item
+                if item.domain == "FACE" and item.data_type == "BOOLEAN"
+                else 0
+            )
             for item in items
         ]
         return flt_flags, []
