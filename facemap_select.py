@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107130236),
+    "version": (0, 0, 20241107132244),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -113,6 +113,11 @@ class FacemapAssign(bpy.types.Operator):
 
     param: bpy.props.StringProperty()
 
+    @classmethod
+    def poll(self, context):
+        fm = context.object.data.attributes.active
+        return fm is not None and fm.domain == "FACE" and fm.data_type == "BOOLEAN"
+
     def execute(self, context):
         obj = context.object
         facemap = context.object.data.attributes.active
@@ -139,6 +144,11 @@ class FacemapSelections(bpy.types.Operator):
     bl_label = "Facemap Selections"
 
     param: bpy.props.StringProperty()
+
+    @classmethod
+    def poll(self, context):
+        fm = context.object.data.attributes.active
+        return fm is not None and fm.domain == "FACE" and fm.data_type == "BOOLEAN"
 
     def execute(self, context):
         obj = context.object
@@ -172,8 +182,12 @@ class FMS_OT_facemap_delete(bpy.types.Operator):
     bl_description = "Delete Active face map "
     bl_options = {"REGISTER", "UNDO"}
 
-    def execute(self, context):
+    @classmethod
+    def poll(self, context):
+        fm = context.object.data.attributes.active
+        return fm is not None and fm.domain == "FACE" and fm.data_type == "BOOLEAN"
 
+    def execute(self, context):
         bpy.ops.geometry.attribute_remove()
         return {"FINISHED"}
 
@@ -274,6 +288,17 @@ def menu_func(self, context):
     self.layout.separator()
     self.layout.operator(FacemapSelect.bl_idname, text="From facemap")
     self.layout.operator(FacemapCreate.bl_idname, text="Create facemap")
+
+
+classes = [
+    FacemapSelect,
+    FacemapCreate,
+    FMS_OT_facemap_delete,
+    FacemapAssign,
+    FacemapSelections,
+    MESH_UL_fmaps,
+    DATA_PT_face_maps,
+]
 
 
 classes = [
