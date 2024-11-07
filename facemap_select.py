@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107135318),
+    "version": (0, 0, 20241107135814),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -37,8 +37,7 @@ bl_info = {
 }
 
 import bpy
-from bpy.types import Menu, Panel, UIList
-import bmesh
+from bpy.types import Panel, UIList
 
 
 class FacemapSelect(bpy.types.Operator):
