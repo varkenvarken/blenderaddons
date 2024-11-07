@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107141318),
+    "version": (0, 0, 20241107143407),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -142,7 +142,7 @@ class FacemapAssign(bpy.types.Operator):
 class FacemapSelections(bpy.types.Operator):
     bl_idname = "mesh.facemap_selections"
     bl_label = "Facemap Selections"
-    bl_description = "Select or deselect faces marked in the active facemap"
+    bl_description = "Select or deselect faces marked in the active facemap\nShift-Select replaces the selection"
     param: bpy.props.StringProperty()
 
     @classmethod
@@ -160,13 +160,21 @@ class FacemapSelections(bpy.types.Operator):
 
         if attribute_name in obj.data.attributes:
             attribute = obj.data.attributes[attribute_name]
-            for poly in obj.data.polygons:
-                # if poly.select:
-                if attribute.data[poly.index].value:
+            if not self.__shift:  # add to or remove from selection
+                for poly in obj.data.polygons:
+                    # if poly.select:
+                    if attribute.data[poly.index].value:
+                        if self.param == "Select":
+                            poly.select = True
+                        if self.param == "Deselect":
+                            poly.select = False
+            else: # set the selection (deselect act the same regardless whether shift is pressed)
+                for poly in obj.data.polygons:
                     if self.param == "Select":
-                        poly.select = True
-                    if self.param == "Deselect":
+                        poly.select = attribute.data[poly.index].value
+                    if self.param == "Deselect" and attribute.data[poly.index].value:
                         poly.select = False
+
             edge = bpy.context.object.data.edges
             for i in edge:
                 i.select = False
@@ -175,7 +183,10 @@ class FacemapSelections(bpy.types.Operator):
 
         return {"FINISHED"}
 
-
+    def invoke(self, context, event):
+        self.__shift = event.shift
+        return self.execute(context)
+    
 class FMS_OT_facemap_delete(bpy.types.Operator):
     bl_idname = "fms.facemap_delete"
     bl_label = "FacemapDelete"
