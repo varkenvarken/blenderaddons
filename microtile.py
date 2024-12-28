@@ -75,6 +75,8 @@ class MicroTile(bpy.types.Operator):
         return context.mode == "EDIT_MESH" and context.active_object.type == "MESH"
 
     def execute(self, context):
+        Z = Vector((0,0,1))
+
         bpy.ops.object.editmode_toggle()  # to object mode
         ob = context.active_object
         me = ob.data
@@ -98,14 +100,18 @@ class MicroTile(bpy.types.Operator):
         for pindex in np.flatnonzero(pselected):
             pverts = verts[me.polygons[pindex].vertices]
             center, normal = planefit(pverts)
-            a, b = orthopoints(normal)
-            pmax = np.max(pverts, axis=0)
-            pmin = np.min(pverts, axis=0)
+            
+            rot2Z = np.array(Z.rotation_difference(Vector(normal)).to_matrix())  # rotation towards Z
+            rot2Zi = np.array(Vector(normal).rotation_difference(Z).to_matrix())  # inverse
+            
+            rotated_pverts = pverts @ rot2Z
+            pmax = np.max(rotated_pverts, axis=0)
+            pmin = np.min(rotated_pverts, axis=0)
 
-            # we start out with the verts that define the polygon
-            new_vertices = list(pverts[:, :2])
+            # we start out with the verts that define the polygon but we drop the z dimension
+            new_vertices = list(rotated_pverts[:, :2])
 
-            # we asume for a moment that the z dimension is flat
+            # we asume for a moment that the z dimension is flat, i.e. minimum and maximum in that dimension are the same so we pick one
             z = pmin[2]
 
             x = pmin[0]
@@ -116,13 +122,13 @@ class MicroTile(bpy.types.Operator):
                 my = pmax[1] - self.size
                 while y < my:
                     y += self.size
-                    print([x, y, z])
+                    # print([x, y, z])
                     me.vertices.add(1)
-                    me.vertices[vcount].co = [x, y, z]
+                    me.vertices[vcount].co = np.array([x, y, z]) @ rot2Zi  # new vertices are rotated back to fit the original plane
                     vcount += 1
                     new_vertices.append(Vector([x, y]))
 
-            vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = delauney(
+            vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = delauney(  # triangulation is done with the 2d (i.e. rotated) verts
                 new_vertices, [], [], 0, 1e-6, True
             )
 
@@ -135,7 +141,7 @@ class MicroTile(bpy.types.Operator):
                 for i, vi in enumerate(f):
                     co = vert_coords[vi].to_3d()
                     co.z = z
-                    me.vertices[vcount + i].co = co
+                    me.vertices[vcount + i].co = np.array(co) @ rot2Zi
                 lcount = len(me.loops)
                 me.loops.add(3)
                 me.polygons.add(1)
