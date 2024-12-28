@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241228101222),
+    "version": (0, 0, 20241228134934),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -75,9 +75,11 @@ class MicroTile(bpy.types.Operator):
         return context.mode == "EDIT_MESH" and context.active_object.type == "MESH"
 
     def execute(self, context):
-        bpy.ops.object.editmode_toggle()
+        bpy.ops.object.editmode_toggle()  # to object mode
         ob = context.active_object
         me = ob.data
+
+        vg = ob.vertex_groups.new(name="MicroTiles")
 
         # get polygon data
         pcount = len(me.polygons)
@@ -91,16 +93,18 @@ class MicroTile(bpy.types.Operator):
         me.vertices.foreach_get("co", verts)
         verts.shape = shape
 
+        original_pcount = pcount
+
         for pindex in np.flatnonzero(pselected):
             pverts = verts[me.polygons[pindex].vertices]
             center, normal = planefit(pverts)
             a, b = orthopoints(normal)
-            print(f"{center=} {normal=} {a=} {b=}")
             pmax = np.max(pverts, axis=0)
             pmin = np.min(pverts, axis=0)
-            print(f"{pmin=} {pmax=}")
 
+            # we start out with the verts that define the polygon
             new_vertices = list(pverts[:, :2])
+
             # we asume for a moment that the z dimension is flat
             z = pmin[2]
 
@@ -122,9 +126,9 @@ class MicroTile(bpy.types.Operator):
                 new_vertices, [], [], 0, 1e-6, True
             )
 
-            print(
-                f"{vert_coords=}\n{edges=}\n{faces=}\n{orig_verts=}\n{orig_edges=}\n{orig_faces}"
-            )
+            # print(
+            #     f"{vert_coords=}\n{edges=}\n{faces=}\n{orig_verts=}\n{orig_edges=}\n{orig_faces}"
+            # )
 
             for f in faces:
                 me.vertices.add(3)
@@ -146,19 +150,23 @@ class MicroTile(bpy.types.Operator):
 
             me.update(calc_edges=True)
 
-        bpy.ops.object.editmode_toggle()
+        bpy.ops.object.editmode_toggle()  # to edit mode
 
         bpy.ops.mesh.remove_doubles(threshold=1e-5)
         bpy.ops.mesh.select_all(action="DESELECT")
 
-        bpy.ops.object.editmode_toggle()
+        bpy.ops.object.editmode_toggle()  # to object mode
+
+        for p in range(original_pcount, pcount):
+            vg.add(me.polygons[p].vertices, 1.0, "REPLACE")
+
         for p in np.flatnonzero(pselected):
-            print(p)
             me.polygons[p].select = True
+            vg.remove(me.polygons[p].vertices)
         me.update()
-        bpy.ops.object.editmode_toggle()
-        bpy.ops.mesh.delete(type='FACE')
-        
+        bpy.ops.object.editmode_toggle()  # to edit mode
+        bpy.ops.mesh.delete(type="FACE")
+
         return {"FINISHED"}
 
 
