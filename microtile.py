@@ -33,7 +33,11 @@ bl_info = {
 import numpy as np
 
 import bpy
-from mathutils.geometry import delaunay_2d_cdt as delauney
+from mathutils.geometry import (
+    delaunay_2d_cdt as delauney,
+    tessellate_polygon as tesselate,
+    intersect_point_tri_2d,
+)
 from mathutils import Vector
 
 
@@ -75,7 +79,7 @@ class MicroTile(bpy.types.Operator):
         return context.mode == "EDIT_MESH" and context.active_object.type == "MESH"
 
     def execute(self, context):
-        Z = Vector((0,0,1))
+        Z = Vector((0, 0, 1))
 
         bpy.ops.object.editmode_toggle()  # to object mode
         ob = context.active_object
@@ -100,10 +104,14 @@ class MicroTile(bpy.types.Operator):
         for pindex in np.flatnonzero(pselected):
             pverts = verts[me.polygons[pindex].vertices]
             center, normal = planefit(pverts)
-            
-            rot2Z = np.array(Z.rotation_difference(Vector(normal)).to_matrix())  # rotation towards Z
-            rot2Zi = np.array(Vector(normal).rotation_difference(Z).to_matrix())  # inverse
-            
+
+            rot2Z = np.array(
+                Z.rotation_difference(Vector(normal)).to_matrix()
+            )  # rotation towards Z
+            rot2Zi = np.array(
+                Vector(normal).rotation_difference(Z).to_matrix()
+            )  # inverse
+
             rotated_pverts = pverts @ rot2Z
             pmax = np.max(rotated_pverts, axis=0)
             pmin = np.min(rotated_pverts, axis=0)
@@ -111,7 +119,10 @@ class MicroTile(bpy.types.Operator):
             # we start out with the verts that define the polygon but we drop the z dimension
             new_vertices = list(rotated_pverts[:, :2])
 
-            # we asume for a moment that the z dimension is flat, i.e. minimum and maximum in that dimension are the same so we pick one
+            # tesselate the polygon
+            tris = tesselate([rotated_pverts])  # input is a list of polylines, even if it is just a single one. Without the list you get a TypeError: tessellate_polygon: parse coord
+
+            # we asume for a moment that the z dimension is completely flat, i.e. minimum and maximum in that dimension are the same so we pick one
             z = pmin[2]
 
             x = pmin[0]
@@ -123,13 +134,24 @@ class MicroTile(bpy.types.Operator):
                 while y < my:
                     y += self.size
                     # print([x, y, z])
-                    me.vertices.add(1)
-                    me.vertices[vcount].co = np.array([x, y, z]) @ rot2Zi  # new vertices are rotated back to fit the original plane
-                    vcount += 1
-                    new_vertices.append(Vector([x, y]))
+                    pt = Vector([x, y])
+                    intersect = False
+                    for tri in tris:
+                        points = [rotated_pverts[i] for i in tri]
+                        if intersect_point_tri_2d(pt, *points):
+                            intersect = True
+                    if intersect:
+                        me.vertices.add(1)
+                        me.vertices[vcount].co = (
+                            np.array([x, y, z]) @ rot2Zi
+                        )  # new vertices are rotated back to fit the original plane
+                        vcount += 1
+                        new_vertices.append(pt)
 
-            vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = delauney(  # triangulation is done with the 2d (i.e. rotated) verts
-                new_vertices, [], [], 0, 1e-6, True
+            vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = (
+                delauney(  # triangulation is done with the 2d (i.e. rotated) verts
+                    new_vertices, [], [], 0, 1e-6, True
+                )
             )
 
             # print(
