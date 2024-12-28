@@ -81,7 +81,7 @@ class PlaneFit(bpy.types.Operator):
         if count > 0:  # degenerate mesh, but better safe than sorry
             shape = (count, 3)
             verts = np.empty(count * 3, dtype=np.float32)
-            selected = np.empty(count, dtype=np.bool)
+            selected = np.empty(count, dtype=bool)
             me.vertices.foreach_get("co", verts)
             me.vertices.foreach_get("select", selected)
             verts.shape = shape
