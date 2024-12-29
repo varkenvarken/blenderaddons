@@ -27,7 +27,7 @@
 bl_info = {
     "name": "FacemapSelect",
     "author": "Michel Anders (varkenvarken) with contribution from Andrew Leichter (aleichter) and Tyo79",
-    "version": (0, 0, 20241107144005),
+    "version": (0, 0, 20241229150211),
     "blender": (4, 0, 0),
     "location": "Edit mode 3d-view, Select- -> From facemap | Create facemap",
     "description": "Select faces based on the active boolean facemap or create a new facemap",
@@ -72,6 +72,7 @@ class FacemapAssign(bpy.types.Operator):
     bl_idname = "mesh.facemap_assign"
     bl_label = "FacemapAssign"
     bl_description = "Assign or remove faces from the active facemap"
+    bl_options = {"REGISTER", "UNDO"}
 
     param: bpy.props.StringProperty()
 
@@ -105,6 +106,8 @@ class FacemapSelections(bpy.types.Operator):
     bl_idname = "mesh.facemap_selections"
     bl_label = "Facemap Selections"
     bl_description = "Select or deselect faces marked in the active facemap\nShift-Select replaces the selection"
+    bl_options = {"REGISTER", "UNDO"}
+
     param: bpy.props.StringProperty()
 
     @classmethod
