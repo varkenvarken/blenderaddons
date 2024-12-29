@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241229122617),
+    "version": (0, 0, 20241229152228),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -111,6 +111,9 @@ class MicroTile(bpy.types.Operator):
 
     @profile
     def do_execute(self, context):
+        # make sure we are in face selection mode 
+        bpy.ops.mesh.select_mode(type='FACE')
+
         Z = Vector((0, 0, 1))
 
         bpy.ops.object.editmode_toggle()  # to object mode
@@ -135,7 +138,10 @@ class MicroTile(bpy.types.Operator):
         original_pcount = pcount
 
         # iterate through all selected polygon indices
-        for pindex in np.flatnonzero(pselected):
+        context.window_manager.progress_begin(0, np.count_nonzero(pselected))
+        for i, pindex in enumerate(np.flatnonzero(pselected)):
+            context.window_manager.progress_update(i)
+
             pverts = verts[me.polygons[pindex].vertices]
             center, normal = planefit(pverts)
 
@@ -161,6 +167,7 @@ class MicroTile(bpy.types.Operator):
                 [rotated_pverts]
             )  # input is a list of polylines, even if it is just a single one. Without the list you get a TypeError: tessellate_polygon: parse coord
 
+            grid = []
             # we asume that the z dimension is completely flat, i.e. minimum and maximum in that dimension are the same so we pick one
             # TODO use the average z-position
             z = pmin[2]
@@ -180,19 +187,38 @@ class MicroTile(bpy.types.Operator):
                     for tri in tris:
                         points = [rotated_pverts[i] for i in tri]
                         if intersect_point_tri_2d(pt, *points):
-                            intersect = True
+                            intersect = True  # TODO can we add a break here?
                     if intersect:
-                        me.vertices.add(
-                            1
-                        )  # TODO roughly 14% of the time is spent in this line, going to 40% when the face count gets really high
-                        me.vertices[vcount].co = (
-                            np.array([x, y, z]) @ rot2Zi
-                        )  # new vertices are rotated back to fit the original plane
-                        vcount += 1
-                        new_vertices.append(pt)
-
+                        grid.append((x, y, z))
+                        # me.vertices.add(
+                        #     1
+                        # )  # TODO roughly 14% of the time is spent in this line, going to 40% when the face count gets really high
+                        # me.vertices[vcount].co = (
+                        #     np.array([x, y, z]) @ rot2Zi
+                        # )  # new vertices are rotated back to fit the original plane
+                        # vcount += 1
+                        # new_vertices.append(pt)
+            # add all new vertices in one go
+            if len(grid):
+                me.vertices.add(len(grid))
+                # rotate vertex position back into the original plane
+                rgrid = np.array(grid) @ rot2Zi
+                # get the positions of all vertices currently in the mesh, incl. the newly added ones
+                vcount2 = len(me.vertices)
+                shape = (vcount2, 3)
+                verts = np.empty(vcount2 * 3, dtype=np.float32)
+                me.vertices.foreach_get("co", verts)
+                verts.shape = shape
+                # update with the new coords
+                # print(f"{vcount=} {vcount2} {grid.shape=}")
+                verts[vcount:] = rgrid
+                me.vertices.foreach_set("co", verts.flatten())
+                new_vertices.extend(Vector(v[:2]) for v in grid)
+                vcount = vcount2
+            
             # the Delauney triangulation will create tris between the collection of
             # new vertices and the ones that made up the original polygon
+            # (even if none of the grid verts was added, if which case we effectively triangulate the original face)
             vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = (
                 delauney(  # triangulation is done with the 2d (i.e. rotated) verts
                     new_vertices, [], [], 0, 1e-6, True
@@ -213,7 +239,9 @@ class MicroTile(bpy.types.Operator):
                         np.array(co) @ rot2Zi
                     )  # TODO roughly 19% of the time is spent in this line, decreasing to 5% when the face count gets really high
                 lcount = len(me.loops)
-                me.loops.add(3)  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
+                me.loops.add(
+                    3
+                )  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
                 me.polygons.add(1)
                 me.polygons[pcount].loop_start = lcount
                 me.polygons[pcount].vertices = [
@@ -225,16 +253,27 @@ class MicroTile(bpy.types.Operator):
                 pcount += 1
 
             me.update(calc_edges=True)
+            me.validate()
+
+        context.window_manager.progress_end()
 
         bpy.ops.object.editmode_toggle()  # to edit mode
 
         # remove any overlapping verts we created
         bpy.ops.mesh.remove_doubles(threshold=1e-5)
 
+        oldpcount = pcount
+        pcount = len(me.polygons)
+        print(f"after double removal: {oldpcount=} {pcount=}")
+
         # unselect everything
         bpy.ops.mesh.select_all(action="DESELECT")
 
         bpy.ops.object.editmode_toggle()  # to object mode
+
+        oldpcount = pcount
+        pcount = len(me.polygons)
+        print(f"after switching to object mode: {oldpcount=} {pcount=}")
 
         # add the new vertices we created to the new vertex group
         for p in range(original_pcount, pcount):
@@ -257,7 +296,9 @@ class MicroTile(bpy.types.Operator):
 
 
 def menu_func(self, context):
-    self.layout.operator(MicroTile.bl_idname, text="Tile selected faces", icon="MESH_GRID")
+    self.layout.operator(
+        MicroTile.bl_idname, text="Tile selected faces", icon="MESH_GRID"
+    )
 
 
 def register():
