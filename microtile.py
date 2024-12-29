@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241229115216),
+    "version": (0, 0, 20241229121952),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -51,6 +51,13 @@ except ImportError:
 
 
 def planefit(points):
+    """
+    Function to fit a plane to a set of 3D points using the least-squares method.
+
+    :param points: The Nx3 array of points to fit the plane to.
+
+    :return: A tuple containing the center and normal vector of the fitted plane."""
+
     ctr = points.mean(axis=0)
     x = points - ctr
     M = np.cov(x.T)
@@ -60,6 +67,14 @@ def planefit(points):
 
 
 def orthopoints(normal):
+    """
+    Computes two orthonormal vectors perpendicular to a given normal vector.
+
+    :param normal: A 3D normal vector as a NumPy array of shape (3,).
+
+    :return: Two orthonormal vectors as NumPy arrays of shape (3,) representing the basis for the 3D space spanned by the input normal vector.
+    """
+
     m = np.argmax(normal)
     x = np.ones(3, dtype=np.float32)
     x[m] = 0
@@ -73,12 +88,13 @@ class MicroTile(bpy.types.Operator):
     bl_idname = "mesh.microtile"
     bl_label = "MicroTile"
     bl_options = {"REGISTER", "UNDO"}
+    bl_description = "Subdivide selected faces down to a configurable polysize"
 
     size: bpy.props.FloatProperty(
         name="Size",
         description="Size of the micro tiles",
         default=0.01,
-        min=0,
+        min=0.0001,
         soft_max=10,
         subtype="DISTANCE",
     )
@@ -88,7 +104,9 @@ class MicroTile(bpy.types.Operator):
         return context.mode == "EDIT_MESH" and context.active_object.type == "MESH"
 
     def execute(self, context):
-        return self.do_execute(context)
+        return self.do_execute(
+            context
+        )  # Blender doesn´t like it if we apply the @profile decorator to the execute() function directly
 
     @profile
     def do_execute(self, context):
@@ -98,15 +116,16 @@ class MicroTile(bpy.types.Operator):
         ob = context.active_object
         me = ob.data
 
+        # we always create a new vertex group and assign any new vertices to it
         vg = ob.vertex_groups.new(name="MicroTiles")
 
-        # get polygon data
+        # get selection status for polygons
         pcount = len(me.polygons)
         pselected = np.empty(pcount, dtype=bool)
         me.polygons.foreach_get("select", pselected)
-        vcount = len(me.vertices)
 
-        # get the positions of all vertices
+        # get the positions of all vertices currently in the mesh
+        vcount = len(me.vertices)
         shape = (vcount, 3)
         verts = np.empty(vcount * 3, dtype=np.float32)
         me.vertices.foreach_get("co", verts)
@@ -114,6 +133,7 @@ class MicroTile(bpy.types.Operator):
 
         original_pcount = pcount
 
+        # iterate through all selected polygon indices
         for pindex in np.flatnonzero(pselected):
             pverts = verts[me.polygons[pindex].vertices]
             center, normal = planefit(pverts)
@@ -125,7 +145,10 @@ class MicroTile(bpy.types.Operator):
                 Vector(normal).rotation_difference(Z).to_matrix()
             )  # inverse
 
+            # rotate all vertices of the polygon so it is alligned with the Z-axis
             rotated_pverts = pverts @ rot2Z
+
+            # calculate the bounding box
             pmax = np.max(rotated_pverts, axis=0)
             pmin = np.min(rotated_pverts, axis=0)
 
@@ -137,9 +160,12 @@ class MicroTile(bpy.types.Operator):
                 [rotated_pverts]
             )  # input is a list of polylines, even if it is just a single one. Without the list you get a TypeError: tessellate_polygon: parse coord
 
-            # we asume for a moment that the z dimension is completely flat, i.e. minimum and maximum in that dimension are the same so we pick one
+            # we asume that the z dimension is completely flat, i.e. minimum and maximum in that dimension are the same so we pick one
+            # TODO use the average z-position
             z = pmin[2]
 
+            # create a grid of new vertices in the plane of the bounding box
+            # and reject any that are not inside the actual (rotated) polygon
             x = pmin[0]
             mx = pmax[0] - self.size
             while x < mx:
@@ -148,7 +174,6 @@ class MicroTile(bpy.types.Operator):
                 my = pmax[1] - self.size
                 while y < my:
                     y += self.size
-                    # print([x, y, z])
                     pt = Vector([x, y])
                     intersect = False
                     for tri in tris:
@@ -158,19 +183,25 @@ class MicroTile(bpy.types.Operator):
                     if intersect:
                         me.vertices.add(
                             1
-                        )  # roughly 14% of the time is spent in this line
+                        )  # TODO roughly 14% of the time is spent in this line, going to 40% when the face count gets really high
                         me.vertices[vcount].co = (
                             np.array([x, y, z]) @ rot2Zi
                         )  # new vertices are rotated back to fit the original plane
                         vcount += 1
                         new_vertices.append(pt)
 
+            # the Delauney triangulation will create tris between the collection of
+            # new vertices and the ones that made up the original polygon
             vert_coords, edges, faces, orig_verts, orig_edges, orig_faces = (
                 delauney(  # triangulation is done with the 2d (i.e. rotated) verts
                     new_vertices, [], [], 0, 1e-6, True
                 )
             )
 
+            # we create new polygons for all the tris in a very naive way:
+            # we simply create the face along with the vertices. That will
+            # result in a lot of duplicate vertices, but we remove all of them
+            # in one go with the help of the remove doubles operator.
             nfaces = len(faces)
             me.vertices.add(nfaces * 3)
             for f in faces:
@@ -179,9 +210,9 @@ class MicroTile(bpy.types.Operator):
                     co.z = z
                     me.vertices[vcount + i].co = (
                         np.array(co) @ rot2Zi
-                    )  # roughly 19% of the time is spent in this line
+                    )  # TODO roughly 19% of the time is spent in this line, decreasing to 5% when the face count gets really high
                 lcount = len(me.loops)
-                me.loops.add(3)  # roughly 16% of the time is spent in this lime
+                me.loops.add(3)  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
                 me.polygons.add(1)
                 me.polygons[pcount].loop_start = lcount
                 me.polygons[pcount].vertices = [
@@ -196,19 +227,29 @@ class MicroTile(bpy.types.Operator):
 
         bpy.ops.object.editmode_toggle()  # to edit mode
 
+        # remove any overlapping verts we created
         bpy.ops.mesh.remove_doubles(threshold=1e-5)
+
+        # unselect everything
         bpy.ops.mesh.select_all(action="DESELECT")
 
         bpy.ops.object.editmode_toggle()  # to object mode
 
+        # add the new vertices we created to the new vertex group
         for p in range(original_pcount, pcount):
             vg.add(me.polygons[p].vertices, 1.0, "REPLACE")
 
+        # select the orginally selected polygons and remove their vertices from the vertex group
         for p in np.flatnonzero(pselected):
             me.polygons[p].select = True
             vg.remove(me.polygons[p].vertices)
+
+        # update the mesh (creating edge data for example)
         me.update()
+
         bpy.ops.object.editmode_toggle()  # to edit mode
+
+        # remove the original polygons (that are still selected at this point) from the mesh
         bpy.ops.mesh.delete(type="FACE")
 
         return {"FINISHED"}
