@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241229121952),
+    "version": (0, 0, 20241229122617),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -96,6 +96,7 @@ class MicroTile(bpy.types.Operator):
         default=0.01,
         min=0.0001,
         soft_max=10,
+        precision=4,
         subtype="DISTANCE",
     )
 
@@ -256,7 +257,7 @@ class MicroTile(bpy.types.Operator):
 
 
 def menu_func(self, context):
-    self.layout.operator(MicroTile.bl_idname, text="Tile selected faces", icon="PLUGIN")
+    self.layout.operator(MicroTile.bl_idname, text="Tile selected faces", icon="MESH_GRID")
 
 
 def register():
