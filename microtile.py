@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241228134934),
+    "version": (0, 0, 20241229115216),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -39,6 +39,15 @@ from mathutils.geometry import (
     intersect_point_tri_2d,
 )
 from mathutils import Vector
+
+profile = lambda x: x
+
+try:
+    from line_profiler import LineProfiler
+
+    profile = LineProfiler()
+except ImportError:
+    pass
 
 
 def planefit(points):
@@ -79,6 +88,10 @@ class MicroTile(bpy.types.Operator):
         return context.mode == "EDIT_MESH" and context.active_object.type == "MESH"
 
     def execute(self, context):
+        return self.do_execute(context)
+
+    @profile
+    def do_execute(self, context):
         Z = Vector((0, 0, 1))
 
         bpy.ops.object.editmode_toggle()  # to object mode
@@ -120,7 +133,9 @@ class MicroTile(bpy.types.Operator):
             new_vertices = list(rotated_pverts[:, :2])
 
             # tesselate the polygon
-            tris = tesselate([rotated_pverts])  # input is a list of polylines, even if it is just a single one. Without the list you get a TypeError: tessellate_polygon: parse coord
+            tris = tesselate(
+                [rotated_pverts]
+            )  # input is a list of polylines, even if it is just a single one. Without the list you get a TypeError: tessellate_polygon: parse coord
 
             # we asume for a moment that the z dimension is completely flat, i.e. minimum and maximum in that dimension are the same so we pick one
             z = pmin[2]
@@ -141,7 +156,9 @@ class MicroTile(bpy.types.Operator):
                         if intersect_point_tri_2d(pt, *points):
                             intersect = True
                     if intersect:
-                        me.vertices.add(1)
+                        me.vertices.add(
+                            1
+                        )  # roughly 14% of the time is spent in this line
                         me.vertices[vcount].co = (
                             np.array([x, y, z]) @ rot2Zi
                         )  # new vertices are rotated back to fit the original plane
@@ -154,18 +171,17 @@ class MicroTile(bpy.types.Operator):
                 )
             )
 
-            # print(
-            #     f"{vert_coords=}\n{edges=}\n{faces=}\n{orig_verts=}\n{orig_edges=}\n{orig_faces}"
-            # )
-
+            nfaces = len(faces)
+            me.vertices.add(nfaces * 3)
             for f in faces:
-                me.vertices.add(3)
                 for i, vi in enumerate(f):
                     co = vert_coords[vi].to_3d()
                     co.z = z
-                    me.vertices[vcount + i].co = np.array(co) @ rot2Zi
+                    me.vertices[vcount + i].co = (
+                        np.array(co) @ rot2Zi
+                    )  # roughly 19% of the time is spent in this line
                 lcount = len(me.loops)
-                me.loops.add(3)
+                me.loops.add(3)  # roughly 16% of the time is spent in this lime
                 me.polygons.add(1)
                 me.polygons[pcount].loop_start = lcount
                 me.polygons[pcount].vertices = [
@@ -210,6 +226,10 @@ def register():
 def unregister():
     bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
     bpy.utils.unregister_class(MicroTile)
+    try:
+        profile.dump_stats("/tmp/test.prof")
+    except AttributeError:
+        pass  # ignore if we did not actually create a LineProfiler instance
 
 
 if __name__ == "__main__":
