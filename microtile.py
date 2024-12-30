@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241230120222),
+    "version": (0, 0, 20241230122518),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -44,6 +44,12 @@ from mathutils import Vector
 
 profile = lambda x: x
 
+# uncomment this if you want the code to be profiled but make sure to disable it in production code: it easily adds 15% to the runtime
+# needs the line_profile package to be installed in Blender.
+# See: https://blog.michelanders.nl/2021/06/installing-python-packages-with-pip-in-your-blender-environment.html
+# on disabling the addon in the preferences a profile will be written to disk, that can be inspected with for example
+# ./Downloads/blender-4.3.1-linux-x64/4.3/python/bin/python3.11 -m line_profiler /tmp/test.prof
+
 # try:
 #     from line_profiler import LineProfiler
 
@@ -51,6 +57,7 @@ profile = lambda x: x
 # except ImportError:
 #     pass
 
+# example: On my machine, selecting 122 faces with an average area of around 5.7 cm2 and a tile size of 1 mm, about 135k tris are added in 6.7 seconds
 
 class MicroTile(bpy.types.Operator):
     bl_idname = "mesh.microtile"
@@ -159,14 +166,7 @@ class MicroTile(bpy.types.Operator):
                             intersect = True  # TODO can we add a break here?
                     if intersect:
                         grid.append((x, y, z))
-                        # me.vertices.add(
-                        #     1
-                        # )  # TODO roughly 14% of the time is spent in this line, going to 40% when the face count gets really high
-                        # me.vertices[vcount].co = (
-                        #     np.array([x, y, z]) @ rot2Zi
-                        # )  # new vertices are rotated back to fit the original plane
-                        # vcount += 1
-                        # new_vertices.append(pt)
+
             # add all new vertices in one go
             if len(grid):
                 me.vertices.add(len(grid))
@@ -181,7 +181,7 @@ class MicroTile(bpy.types.Operator):
                 # update with the new coords
                 # print(f"{vcount=} {vcount2} {grid.shape=}")
                 verts[vcount:] = rgrid
-                me.vertices.foreach_set("co", verts.flatten())
+                me.vertices.foreach_set("co", verts.flatten())  # TODO 10% of the time is spent here
                 new_vertices.extend(Vector(v[:2]) for v in grid)
                 vcount = vcount2
 
@@ -206,16 +206,16 @@ class MicroTile(bpy.types.Operator):
                     co.z = z
                     me.vertices[vcount + nf * 3 + ni].co = (
                         np.array(co) @ rot2Zi
-                    )  # TODO roughly 19% of the time is spent in this line, decreasing to 5% when the face count gets really high
+                    )
 
             # we add the same number of loops as we did add verts, so their indices should match up
             lcount = len(me.loops)
             me.loops.add(3 * nfaces)
             newlcount = len(me.loops)
             ldata = np.empty(newlcount, dtype=np.int32)
-            me.loops.foreach_get("vertex_index", ldata)
+            me.loops.foreach_get("vertex_index", ldata)  # TODO 13% of the time is spent here
             ldata[lcount:] = np.arange(vcount, vcount + 3 * nfaces, dtype=np.int32)
-            me.loops.foreach_set("vertex_index", ldata)
+            me.loops.foreach_set("vertex_index", ldata)  # TODO 16% of the time is spent here
 
             me.polygons.add(nfaces)
             newpcount = len(me.polygons)
@@ -250,25 +250,17 @@ class MicroTile(bpy.types.Operator):
             threshold=1e-4
         )  # TODO make this dependent on the grid size? Because with a size of 1e-3, 1e-5 will miss vertices
 
-        # oldpcount = pcount
-        # pcount = len(me.polygons)
-        # print(f"after double removal: {oldpcount=} {pcount=}")
-
         # unselect everything
         bpy.ops.mesh.select_all(action="DESELECT")
 
         bpy.ops.object.editmode_toggle()  # to object mode
-
-        # oldpcount = pcount
-        # pcount = len(me.polygons)
-        # print(f"after switching to object mode: {oldpcount=} {pcount=}")
 
         # add the new vertices we created to the new vertex group
         for p in range(original_pcount, len(me.polygons)):
             vg.add(me.polygons[p].vertices, 1.0, "REPLACE")
 
         # select the orginally selected polygons and remove their vertices from the vertex group
-        # TODO this ain´t perfect yet; because of the remove doubles, sometimes one of the new vertices will be at the exact same position (so the wrong one was deduplicated)
+        # TODO this isn´t perfect yet; because of the remove doubles, sometimes one of the new vertices will be at the exact same position (so the wrong one was deduplicated)
         for p in np.flatnonzero(pselected):
             me.polygons[p].select = True
             vg.remove(me.polygons[p].vertices)
