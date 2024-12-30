@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241229152228),
+    "version": (0, 0, 20241230104252),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -111,8 +111,8 @@ class MicroTile(bpy.types.Operator):
 
     @profile
     def do_execute(self, context):
-        # make sure we are in face selection mode 
-        bpy.ops.mesh.select_mode(type='FACE')
+        # make sure we are in face selection mode
+        bpy.ops.mesh.select_mode(type="FACE")
 
         Z = Vector((0, 0, 1))
 
@@ -215,7 +215,7 @@ class MicroTile(bpy.types.Operator):
                 me.vertices.foreach_set("co", verts.flatten())
                 new_vertices.extend(Vector(v[:2]) for v in grid)
                 vcount = vcount2
-            
+
             # the Delauney triangulation will create tris between the collection of
             # new vertices and the ones that made up the original polygon
             # (even if none of the grid verts was added, if which case we effectively triangulate the original face)
@@ -231,19 +231,47 @@ class MicroTile(bpy.types.Operator):
             # in one go with the help of the remove doubles operator.
             nfaces = len(faces)
             me.vertices.add(nfaces * 3)
-            for f in faces:
-                for i, vi in enumerate(f):
+            for nf, f in enumerate(faces):
+                for ni, vi in enumerate(f):
                     co = vert_coords[vi].to_3d()
                     co.z = z
-                    me.vertices[vcount + i].co = (
+                    me.vertices[vcount + nf * 3 + ni].co = (
                         np.array(co) @ rot2Zi
                     )  # TODO roughly 19% of the time is spent in this line, decreasing to 5% when the face count gets really high
-                lcount = len(me.loops)
-                me.loops.add(
-                    3
-                )  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
-                me.polygons.add(1)
-                me.polygons[pcount].loop_start = lcount
+                # lcount = len(me.loops)
+                # me.loops.add(
+                #     3
+                # )  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
+                # me.polygons.add(1)
+                # me.polygons[pcount].loop_start = lcount
+                # me.polygons[pcount].vertices = [
+                #     vcount,
+                #     vcount + 1,
+                #     vcount + 2,
+                # ]
+                # vcount += 3
+                # pcount += 1
+            # we add the same number of loops as we did add verts, so their indices should match up
+            lcount = len(me.loops)
+            me.loops.add(3 * nfaces)
+            newlcount = len(me.loops)
+            ldata = np.empty(newlcount, dtype=np.int32)
+            me.loops.foreach_get("vertex_index", ldata)
+            ldata[lcount:] = np.arange(vcount, vcount + 3 * nfaces, dtype=np.int32)
+            me.loops.foreach_set("vertex_index", ldata)
+
+            me.polygons.add(nfaces)
+            newpcount = len(me.polygons)
+            print(f"{lcount=} {newlcount=} {pcount=} {newpcount=}")
+            pdata = np.empty(newpcount, dtype=np.int32)
+            me.polygons.foreach_get("loop_start", pdata)
+            pdata[pcount:] = np.arange(lcount, newlcount, 3, dtype=np.int32)
+            me.polygons.foreach_set("loop_start", pdata)
+            me.polygons.foreach_get("loop_total", pdata)
+            pdata[pcount:] = 3
+            me.polygons.foreach_set("loop_total", pdata)
+
+            while pcount < newpcount:
                 me.polygons[pcount].vertices = [
                     vcount,
                     vcount + 1,
@@ -252,7 +280,7 @@ class MicroTile(bpy.types.Operator):
                 vcount += 3
                 pcount += 1
 
-            me.update(calc_edges=True)
+            me.update(calc_edges=True)  # TODO, see if this needs to go outside the loop
             me.validate()
 
         context.window_manager.progress_end()
