@@ -21,7 +21,7 @@
 bl_info = {
     "name": "MicroTile",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20241230104252),
+    "version": (0, 0, 20241230120222),
     "blender": (4, 3, 0),
     "location": "Edit mode 3d-view, Add-->MicroTile",
     "description": "Subdivide selected faces down to a configurable polysize",
@@ -29,6 +29,8 @@ bl_info = {
     "wiki_url": "",
     "category": "Mesh",
 }
+
+from time import time
 
 import numpy as np
 
@@ -42,46 +44,12 @@ from mathutils import Vector
 
 profile = lambda x: x
 
-try:
-    from line_profiler import LineProfiler
+# try:
+#     from line_profiler import LineProfiler
 
-    profile = LineProfiler()
-except ImportError:
-    pass
-
-
-def planefit(points):
-    """
-    Function to fit a plane to a set of 3D points using the least-squares method.
-
-    :param points: The Nx3 array of points to fit the plane to.
-
-    :return: A tuple containing the center and normal vector of the fitted plane."""
-
-    ctr = points.mean(axis=0)
-    x = points - ctr
-    M = np.cov(x.T)
-    eigenvalues, eigenvectors = np.linalg.eig(M)
-    normal = eigenvectors[:, eigenvalues.argmin()]
-    return ctr, normal
-
-
-def orthopoints(normal):
-    """
-    Computes two orthonormal vectors perpendicular to a given normal vector.
-
-    :param normal: A 3D normal vector as a NumPy array of shape (3,).
-
-    :return: Two orthonormal vectors as NumPy arrays of shape (3,) representing the basis for the 3D space spanned by the input normal vector.
-    """
-
-    m = np.argmax(normal)
-    x = np.ones(3, dtype=np.float32)
-    x[m] = 0
-    x /= np.linalg.norm(x)
-    x = np.cross(normal, x)
-    y = np.cross(normal, x)
-    return x, y
+#     profile = LineProfiler()
+# except ImportError:
+#     pass
 
 
 class MicroTile(bpy.types.Operator):
@@ -111,6 +79,7 @@ class MicroTile(bpy.types.Operator):
 
     @profile
     def do_execute(self, context):
+        start = time()
         # make sure we are in face selection mode
         bpy.ops.mesh.select_mode(type="FACE")
 
@@ -143,7 +112,7 @@ class MicroTile(bpy.types.Operator):
             context.window_manager.progress_update(i)
 
             pverts = verts[me.polygons[pindex].vertices]
-            center, normal = planefit(pverts)
+            normal = me.polygons[pindex].normal
 
             rot2Z = np.array(
                 Z.rotation_difference(Vector(normal)).to_matrix()
@@ -238,19 +207,7 @@ class MicroTile(bpy.types.Operator):
                     me.vertices[vcount + nf * 3 + ni].co = (
                         np.array(co) @ rot2Zi
                     )  # TODO roughly 19% of the time is spent in this line, decreasing to 5% when the face count gets really high
-                # lcount = len(me.loops)
-                # me.loops.add(
-                #     3
-                # )  # TODO roughly 16% of the time is spent in this lime, going to 30+% when the face count gets really high
-                # me.polygons.add(1)
-                # me.polygons[pcount].loop_start = lcount
-                # me.polygons[pcount].vertices = [
-                #     vcount,
-                #     vcount + 1,
-                #     vcount + 2,
-                # ]
-                # vcount += 3
-                # pcount += 1
+
             # we add the same number of loops as we did add verts, so their indices should match up
             lcount = len(me.loops)
             me.loops.add(3 * nfaces)
@@ -262,7 +219,7 @@ class MicroTile(bpy.types.Operator):
 
             me.polygons.add(nfaces)
             newpcount = len(me.polygons)
-            print(f"{lcount=} {newlcount=} {pcount=} {newpcount=}")
+            # print(f"{lcount=} {newlcount=} {pcount=} {newpcount=}")
             pdata = np.empty(newpcount, dtype=np.int32)
             me.polygons.foreach_get("loop_start", pdata)
             pdata[pcount:] = np.arange(lcount, newlcount, 3, dtype=np.int32)
@@ -280,34 +237,38 @@ class MicroTile(bpy.types.Operator):
                 vcount += 3
                 pcount += 1
 
-            me.update(calc_edges=True)  # TODO, see if this needs to go outside the loop
-            me.validate()
+        me.update(calc_edges=True)
+        me.validate()
 
         context.window_manager.progress_end()
 
         bpy.ops.object.editmode_toggle()  # to edit mode
 
         # remove any overlapping verts we created
-        bpy.ops.mesh.remove_doubles(threshold=1e-5)
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.remove_doubles(
+            threshold=1e-4
+        )  # TODO make this dependent on the grid size? Because with a size of 1e-3, 1e-5 will miss vertices
 
-        oldpcount = pcount
-        pcount = len(me.polygons)
-        print(f"after double removal: {oldpcount=} {pcount=}")
+        # oldpcount = pcount
+        # pcount = len(me.polygons)
+        # print(f"after double removal: {oldpcount=} {pcount=}")
 
         # unselect everything
         bpy.ops.mesh.select_all(action="DESELECT")
 
         bpy.ops.object.editmode_toggle()  # to object mode
 
-        oldpcount = pcount
-        pcount = len(me.polygons)
-        print(f"after switching to object mode: {oldpcount=} {pcount=}")
+        # oldpcount = pcount
+        # pcount = len(me.polygons)
+        # print(f"after switching to object mode: {oldpcount=} {pcount=}")
 
         # add the new vertices we created to the new vertex group
-        for p in range(original_pcount, pcount):
+        for p in range(original_pcount, len(me.polygons)):
             vg.add(me.polygons[p].vertices, 1.0, "REPLACE")
 
         # select the orginally selected polygons and remove their vertices from the vertex group
+        # TODO this ain´t perfect yet; because of the remove doubles, sometimes one of the new vertices will be at the exact same position (so the wrong one was deduplicated)
         for p in np.flatnonzero(pselected):
             me.polygons[p].select = True
             vg.remove(me.polygons[p].vertices)
@@ -319,6 +280,8 @@ class MicroTile(bpy.types.Operator):
 
         # remove the original polygons (that are still selected at this point) from the mesh
         bpy.ops.mesh.delete(type="FACE")
+
+        self.report({"INFO"}, f"time: {time()-start:.3f}")  # 6.7 seconds 0.001m
 
         return {"FINISHED"}
 
