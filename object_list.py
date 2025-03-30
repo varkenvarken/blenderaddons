@@ -1,7 +1,7 @@
 #  ##### BEGIN GPL LICENSE BLOCK #####
 #  
 #  ObjectList, a Blender add-on
-#  (c) 2021 Michel Anders (varkenvarken)
+#  (c) 2021,2025 Michel Anders (varkenvarken)
 #  
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
