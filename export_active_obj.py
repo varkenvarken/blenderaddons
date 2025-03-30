@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  Export Active Obj, a Blender addon
-#  (c) 2024 Michel J. Anders (varkenvarken)
+#  (c) 2024, 2025 Michel J. Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -24,8 +24,8 @@ bl_info = {
     "author": "Michel Anders (varkenvarken)",
     "version": (1, 0),
     "category": "Import-Export",
-    "description": "Export selected objects as a wavefront obj file with the name of the active object",
-    "blender": (4, 0, 0),
+    "description": "Export selected objects as a wavefront obj file with the name of the active object and modifiers and triangulation applied",
+    "blender": (4, 4, 0),
 }
 import bpy
 
@@ -40,6 +40,8 @@ def menu_func(self, context):
     op.forward_axis = "Y"
     op.up_axis = "Z"
     op.export_selected_objects = True
+    op.apply_modifiers = True
+    op.export_triangulated_mesh = True
 
 
 def register():
