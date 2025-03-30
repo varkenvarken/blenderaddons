@@ -22,8 +22,8 @@
 bl_info = {
     "name": "ObjectList",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 202107090943),
-    "blender": (2, 93, 0),
+    "version": (0, 0, 20250330164913),
+    "blender": (4, 4, 0),
     "location": "View3D > Object > Object List",
     "description": "create a comma separated list with object info",
     "warning": "",
@@ -36,11 +36,11 @@ import bmesh
 
 def object_list(context):
     bm = bmesh.new()
-    depsgraph = context.view_layer.depsgraph
-    for ob in context.scene.objects:
+    # depsgraph = context.view_layer.depsgraph. Not needed, we are not using the depsgraph , we use from_mesh()
+    for ob in context.selected_objects:
         tris, faces, edges, verts = 0,0,0,0
         if ob.type == 'MESH':
-            bm.from_object(ob, depsgraph, face_normals=False)
+            bm.from_mesh(ob.data)
             tris = len(bm.calc_loop_triangles())
             verts = len(bm.verts)
             edges = len(bm.edges)
