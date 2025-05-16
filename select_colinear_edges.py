@@ -1,122 +1,124 @@
 bl_info = {
     "name": "Select Colinear Edges",
-    "author": "OpenAI ChatGPT and Michel Anders (varkenvarken)",
-    "version": (0, 0, 20250515133231),
-    "blender": (4, 4, 0),
-    "location": "Mesh > Select > Select All by Trait > Colinear Edges",
-    "description": "Selects edges that are colinear with selected ones, with options for connected chains and multiple seeds",
+    "author": "michel.anders, GitHub Copilot",
+    "version": (1, 1, 0),
+    "blender": (2, 80, 0),
+    "location": "View3D > Select > Select Similar > Colinear Edges",
+    "description": "Select all edges colinear with any currently selected edge, optionally only along colinear paths",
     "category": "Mesh",
 }
 
 import bpy
 import bmesh
-import numpy as np
+from mathutils import Vector
 
-def are_edges_colinear(a, b, tol=1e-6):
-    """Check if two 3D edges are colinear."""
-    a0, a1 = np.array(a[0]), np.array(a[1])
-    b0, b1 = np.array(b[0]), np.array(b[1])
-
-    va = a1 - a0
-    vb = b1 - b0
-
-    cross = np.cross(va, vb)
-    if np.linalg.norm(cross) > tol:
-        return False
-
-    vab0 = b0 - a0
-    cross_check = np.cross(va, vab0)
-    if np.linalg.norm(cross_check) > tol:
-        return False
-
-    return True
 
 class MESH_OT_select_colinear_edges(bpy.types.Operator):
-    """Select colinear edges, with options for connected chains and multi-seed"""
-    bl_idname = "mesh.select_colinear_edges"
-    bl_label = "Select Colinear Edges"
-    bl_options = {'REGISTER', 'UNDO'}
+    """Select all edges colinear with any currently selected edge, optionally only along colinear paths"""
 
-    connected_only: bpy.props.BoolProperty(
-        name="Connected Only",
-        description="Only grow selection through connected edges",
-        default=False
+    bl_idname = "mesh.select_colinear_edges"
+    bl_label = "Colinear Edges"
+    bl_options = {"REGISTER", "UNDO"}
+
+    angle_threshold: bpy.props.FloatProperty(
+        name="Angle Threshold",
+        description="Maximum angle (degrees) to consider edges colinear",
+        default=1.0,
+        min=0.0,
+        max=10.0,
     )
 
-    use_multiple_seeds: bpy.props.BoolProperty(
-        name="Use Multiple Selected Edges",
-        description="Use all currently selected edges as starting points",
-        default=False
+    only_colinear_paths: bpy.props.BoolProperty(
+        name="Only Colinear Paths",
+        description="Only select edges connected via colinear paths from the originally selected edges",
+        default=True,
     )
 
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        return obj and obj.type == 'MESH' and context.mode == 'EDIT_MESH'
+        return obj and obj.type == "MESH" and context.mode == "EDIT_MESH"
 
     def execute(self, context):
-        obj = context.object
+        obj = context.active_object
         bm = bmesh.from_edit_mesh(obj.data)
         bm.edges.ensure_lookup_table()
-        bm.verts.ensure_lookup_table()
 
-        selected_edges = [e for e in bm.edges if e.select]
-        if not selected_edges:
-            self.report({'WARNING'}, "No edges selected")
-            return {'CANCELLED'}
+        # Find all originally selected edges
+        original_selected_edges = [e for e in bm.edges if e.select]
+        if not original_selected_edges:
+            self.report({"WARNING"}, "No edges selected")
+            return {"CANCELLED"}
 
-        seed_edges = selected_edges if self.use_multiple_seeds else [selected_edges[-1]]
-
-        def edge_coords(edge):
-            return [(v.co.x, v.co.y, v.co.z) for v in edge.verts]
-
+        # Deselect all edges first
         for e in bm.edges:
             e.select = False
 
-        visited = set()
+        threshold_rad = self.angle_threshold * 3.14159265 / 180.0
 
-        def grow_connected(seed_edge, ref_coords):
-            to_visit = {seed_edge}
-            chain = set()
+        def edge_dir(edge):
+            v1, v2 = edge.verts
+            return (v2.co - v1.co).normalized()
 
-            while to_visit:
-                current = to_visit.pop()
-                if current in chain:
-                    continue
-                chain.add(current)
-                for v in current.verts:
-                    for linked in v.link_edges:
-                        if linked not in chain and are_edges_colinear(ref_coords, edge_coords(linked)):
-                            to_visit.add(linked)
-            return chain
+        def are_colinear(e1, e2):
+            # Check if direction vectors are parallel
+            dir1 = edge_dir(e1)
+            dir2 = edge_dir(e2)
+            angle = dir1.angle(dir2)
+            if not (angle < threshold_rad or abs(angle - 3.14159265) < threshold_rad):
+                return False
+            # Check if the vector between their start points is also parallel to the direction
+            v1 = e1.verts[0].co
+            w1 = e2.verts[0].co
+            between = w1 - v1
+            # If between is zero vector, they share a vertex, so colinear
+            if between.length < 1e-6:
+                return True
+            between_dir = between.normalized()
+            angle2 = dir1.angle(between_dir)
+            return angle2 < threshold_rad or abs(angle2 - 3.14159265) < threshold_rad
 
-        if self.connected_only:
-            for seed in seed_edges:
-                ref_coords = edge_coords(seed)
-                visited.update(grow_connected(seed, ref_coords))
+        if self.only_colinear_paths:
+            visited = set()
+            queue = []
+            for e in original_selected_edges:
+                queue.append(e)
+                visited.add(e)
+
+            while queue:
+                current_edge = queue.pop(0)
+                current_edge.select = True
+                for v in current_edge.verts:
+                    for neighbor in v.link_edges:
+                        if neighbor is current_edge or neighbor in visited:
+                            continue
+                        if are_colinear(current_edge, neighbor):
+                            queue.append(neighbor)
+                            visited.add(neighbor)
         else:
             for e in bm.edges:
-                for seed in seed_edges:
-                    if are_edges_colinear(edge_coords(seed), edge_coords(e)):
-                        visited.add(e)
+                for sel_edge in original_selected_edges:
+                    if are_colinear(sel_edge, e):
+                        e.select = True
                         break
 
-        for e in visited:
-            e.select = True
+        bmesh.update_edit_mesh(obj.data)
+        return {"FINISHED"}
 
-        bmesh.update_edit_mesh(obj.data, loop_triangles=False)
-        return {'FINISHED'}
 
 def menu_func(self, context):
     self.layout.operator(MESH_OT_select_colinear_edges.bl_idname, text="Colinear Edges")
 
+
 def register():
     bpy.utils.register_class(MESH_OT_select_colinear_edges)
-    bpy.types.VIEW3D_MT_edit_mesh_select_by_trait.append(menu_func)
+    bpy.types.VIEW3D_MT_edit_mesh_select_similar.append(menu_func)
+
 
 def unregister():
-    bpy.types.VIEW3D_MT_edit_mesh_select_by_trait.remove(menu_func)
+    bpy.types.VIEW3D_MT_edit_mesh_select_similar.remove(menu_func)
     bpy.utils.unregister_class(MESH_OT_select_colinear_edges)
+
 
 if __name__ == "__main__":
     register()
