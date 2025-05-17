@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Select Colinear Edges",
     "author": "michel.anders, GitHub Copilot",
-    "version": (1, 1, 0),
-    "blender": (2, 80, 0),
+    "version": (1, 1, 20250517142157),
+    "blender": (4, 4, 0),
     "location": "View3D > Select > Select Similar > Colinear Edges",
     "description": "Select all edges colinear with any currently selected edge, optionally only along colinear paths",
     "category": "Mesh",
@@ -63,7 +63,12 @@ class MESH_OT_select_colinear_edges(bpy.types.Operator):
         def are_colinear(e1, e2):
             # Check if direction vectors are parallel
             dir1 = edge_dir(e1)
+            # guard against zero length edges
+            if dir1.length < 1e-6:
+                return False
             dir2 = edge_dir(e2)
+            if dir2.length < 1e-6:
+                return False
             angle = dir1.angle(dir2)
             if not (angle < threshold_rad or abs(angle - 3.14159265) < threshold_rad):
                 return False
