@@ -15,7 +15,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |backdrop.py                             | 2016-01-24 |      |       |
 |basket_arch.py                          | 2025-06-08 | 4.4  |       |
 |chainobjects.py                         | 2017-01-22 |      |       |
-|chull.py                                | 2017-06-09 |      |       |
+|chull.py                                | 2017-06-09 |      | won´t fix, functionality available in Blender now |
 |colorramppicker.py                      | 2019-07-29 |      |       |
 |connectedvertexcolors .py               | 2014-07-09 |      |       |
 |createmesh .py                          | 2019-09-03 |      |       |
@@ -52,7 +52,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |slope.py                                | 2024-04-08 |      |       |
 |slope2vcol.py                           | 2013-09-07 |      |       |
 |slope2vgroup.py                         | 2013-09-06 |      |       |
-|snapandtransform.py                     | 2018-03-31 |      |       |
+|snapandtransform.py                     | 2018-03-31 |      | won´t fix, superseeded by snapandtransform280.py |
 |snapandtransform280.py                  | 2019-03-25 |      |       |
 |spokes.py                               | 2015-02-08 |      |       |
 |trace.py                                | 2020-05-05 |      |       |
