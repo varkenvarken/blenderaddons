@@ -21,12 +21,12 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |createmesh .py                          | 2019-09-03 |      |       |
 |drystone.py                             | 2016-12-13 |      |       |
 |dumpmesh.py                             | 2019-09-03 |      |       |
-|edgemap_select.py                       | 2025-06-03 |      |       |
+|edgemap_select.py                       | 2025-06-03 | 4.4  |       |
 |ellipsoidfit.py                         | 2019-07-18 |      |       |
 |export-opengl.py                        | 2018-07-31 |      |       |
 |export_active_obj.py                    | 2025-03-30 |      |       |
 |facearea.py                             | 2020-05-10 |      |       |
-|facemap_select.py                       | 2024-12-29 |      |       |
+|facemap_select.py                       | 2024-12-29 | 4.4  |       |
 |gears20.py                              | 2021-01-03 |      |       |
 |height.py                               | 2013-09-16 |      |       |
 |line_profiler.py                        | 2016-12-23 |      |       |
