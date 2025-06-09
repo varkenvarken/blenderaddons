@@ -39,7 +39,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |nodeset.py                              | 2018-01-03 |      |       |
 |object_list.py                          | 2025-03-30 |      |       |
 |opengl_debug.py                         | 2019-08-21 |      |       |
-|planefit.py                             | 2024-12-28 |      |       |
+|planefit.py                             | 2025-06-09 | 4.4  |       |
 |planks.py                               | 2024-05-08 |      |       |
 |randomvertexcolors.py                   | 2016-02-07 |      |       |
 |randomvertexcolors280.py                | 2021-11-14 |      |       |

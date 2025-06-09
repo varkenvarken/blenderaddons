@@ -21,12 +21,12 @@
 bl_info = {
     "name": "PlaneFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20240119092744),
-    "blender": (4, 0, 0),
+    "version": (0, 0, 20250609104400),
+    "blender": (4, 0, 0),  # tested with 4.4
     "location": "Edit mode 3d-view, Add-->PlaneFit",
     "description": "Add a plane that best fits a collection of selected vertices",
     "warning": "",
-    "wiki_url": "",
+    "wiki_url": "https://github.com/varkenvarken/blenderaddons",
     "category": "Mesh",
 }
 
