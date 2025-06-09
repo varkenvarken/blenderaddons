@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  LineFit, (c) 2017, 2024 Michel Anders (varkenvarken)
+#  LineFit, (c) 2017, 2024, 2025 Michel Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -21,8 +21,8 @@
 bl_info = {
     "name": "LineFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20240119100755),
-    "blender": (4, 0, 0),
+    "version": (0, 0, 20250609112443),
+    "blender": (4, 4, 0),  # tested with 4.4
     "location": "Edit mode 3d-view, Add-->LineFit",
     "description": "Add a single edge to the mesh that best fits a collection of selected vertices",
     "warning": "",
@@ -69,7 +69,7 @@ class LineFit(bpy.types.Operator):
         if count > 0:  # degenerate mesh, but better safe than sorry
             shape = (count, 3)
             verts = np.empty(count * 3, dtype=np.float32)
-            selected = np.empty(count, dtype=np.bool)
+            selected = np.empty(count, dtype=bool)
             me.vertices.foreach_get("co", verts)
             me.vertices.foreach_get("select", selected)
             verts.shape = shape

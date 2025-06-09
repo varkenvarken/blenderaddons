@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  PlaneFit, (c) 2017,2018,2020,2024 Michel Anders (varkenvarken)
+#  PlaneFit, (c) 2017,2018,2020,2024,2025 Michel Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License

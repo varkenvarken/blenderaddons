@@ -30,7 +30,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |gears20.py                              | 2021-01-03 |      |       |
 |height.py                               | 2013-09-16 |      |       |
 |line_profiler.py                        | 2016-12-23 |      |       |
-|linefit.py                              | 2024-01-19 |      |       |
+|linefit.py                              | 2025-06-09 | 4.4  |       |
 |makevertexcolorsunique.py               | 2017-09-22 |      |       |
 |mesh2heightmap.py                       | 2018-12-24 |      |       |
 |metaballscale.py                        | 2018-09-23 |      |       |
