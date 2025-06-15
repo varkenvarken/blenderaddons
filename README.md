@@ -3,6 +3,9 @@ blenderaddons
 
 A collection of small addons for Blender, mostly documented on [my blog](blenderthings.blogspot.com)
 
+If you are interested in developing add-ons yourself, check out [this repo, blenderaddons-ng](https://github.com/varkenvarken/blenderaddons-ng) which is configured to provide easy testing, benchmarking, profiling and automated testing in Vscode & GitHub actions.
+New add-ons and fixes for existing add-ons will most likely appear in this new repo. The first add-on that was moved is [select_colinear_edges.py](/select_colinear_edges.py), which you can now find [here](https://github.com/varkenvarken/blenderaddons-ng/blob/main/add_ons/select_colinear_edges.py).
+
 status
 ======
 
