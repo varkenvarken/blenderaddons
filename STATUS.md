@@ -46,7 +46,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |ray_trace_renderer.py                   | 2018-06-16 |      |       |
 |reportpanel.py                          | 2021-05-09 |      |       |
 |search.py                               | 2019-07-18 |      |       |
-|select_colinear_edges.py                | 2025-05-17 |      |       |
+|select_colinear_edges.py                | 2025-05-17 | 4.4  | moved to [blenderaddons-ng repo](https://github.com/varkenvarken/blenderaddons-ng/blob/main/add_ons/select_colinear_edges.py) |
 |selectsimilarverts.py                   | 2016-11-25 |      |       |
 |sibl.py                                 | 2015-03-13 |      |       |
 |slope.py                                | 2024-04-08 |      |       |
