@@ -22,7 +22,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |drystone.py                             | 2025-06-28 | 4.4  |       |
 |dumpmesh.py                             | 2019-09-03 |      |       |
 |edgemap_select.py                       | 2025-06-03 | 4.4  |       |
-|ellipsoidfit.py                         | 2019-07-18 |      |       |
+|ellipsoidfit.py                         | 2025-06-09 | 4.4  |       |
 |export-opengl.py                        | 2018-07-31 |      |       |
 |export_active_obj.py                    | 2025-03-30 |      |       |
 |facearea.py                             | 2020-05-10 |      |       |

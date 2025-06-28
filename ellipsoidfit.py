@@ -1,6 +1,6 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
-#  EllipsoidFit, (c) 2017 Michel Anders (varkenvarken)
+#  EllipsoidFit, (c) 2017,2025 Michel Anders (varkenvarken)
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -21,12 +21,12 @@
 bl_info = {
     "name": "EllipsoidFit",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 201712201500),
-    "blender": (2, 79, 0),
+    "version": (0, 0, 20250609143117),
+    "blender": (4, 4, 0),  # tested with 4.4.0
     "location": "Edit mode 3d-view, Add-->EllipsoidFit",
     "description": "Add a single ellipsoid metaball that best fits a collection of selected vertices",
     "warning": "",
-    "wiki_url": "",
+    "wiki_url": "https://github.com/varkenvarken/blenderaddons",
     "category": "Mesh",
 }
 
@@ -64,25 +64,28 @@ def Fit(points):
 import bpy
 from mathutils import Matrix
 
+import bmesh
+
+
 class EllipsoidFit(bpy.types.Operator):
 	bl_idname = 'mesh.ellipsoidfit'
 	bl_label = 'EllipsoidFit'
 	bl_options = {'REGISTER', 'UNDO'}
 
-	size = bpy.props.FloatProperty(name="Size", description="Radius of the metaball", default=1, min=0, soft_max=10)
+	size: bpy.props.FloatProperty(name="Size", description="Radius of the ellipsoid", default=1, min=0, soft_max=10)
 
 	@classmethod
 	def poll(self, context):
 		return (context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH')
 
 	def execute(self, context):
-		bpy.ops.object.editmode_toggle()
 		me = context.active_object.data
 		count = len(me.vertices)
 		if count > 0:  # degenerate mesh, but better safe than sorry
+			
 			shape = (count, 3)
 			verts = np.empty(count*3, dtype=np.float32)
-			selected = np.empty(count, dtype=np.bool)
+			selected = np.empty(count, dtype=bool)
 			me.vertices.foreach_get('co', verts)
 			me.vertices.foreach_get('select', selected)
 			verts.shape = shape
@@ -92,21 +95,21 @@ class EllipsoidFit(bpy.types.Operator):
 				verts = sphere * (sizes * self.size)
 				verts = (verts @ rot) + ctr
 				# can't use mesh.from_pydata here because that won't let us ADD to a mesh
-				me.vertices.add(len(verts))
-				for i in range(len(verts)):
-					me.vertices[count+i].co = verts[i]
-				lcount = len(me.loops)
-				me.loops.add(4*len(quads))
-				pcount = len(me.polygons)
-				me.polygons.add(len(quads))
-				for i in range(len(quads)):
-					me.polygons[pcount+i].loop_total = 4
-					me.polygons[pcount+i].loop_start = lcount + i * 4
-					me.polygons[pcount+i].vertices = [count+quads[i][0],count+quads[i][1],count+quads[i][2],count+quads[i][3]]
-				me.update(calc_edges=True)
+				
+				
+				bm = bmesh.from_edit_mesh(me)
+		
+				for q in quads:
+					v0 = bm.verts.new(verts[q[0]])
+					v1 = bm.verts.new(verts[q[1]])
+					v2 = bm.verts.new(verts[q[2]])
+					v3 = bm.verts.new(verts[q[3]])
+					f = bm.faces.new((v0, v1, v2, v3))
+					f.smooth = True
+
+				bmesh.update_edit_mesh(me)
 			else:
 				self.report({'WARNING'}, "Need at least 3 selected vertices to fit an ellipsoid")
-		bpy.ops.object.editmode_toggle()
 		return {'FINISHED'}
 
 def menu_func(self, context):
@@ -114,12 +117,12 @@ def menu_func(self, context):
 						icon='PLUGIN')
 
 def register():
-	bpy.utils.register_module(__name__)
-	bpy.types.INFO_MT_mesh_add.append(menu_func)
+	bpy.utils.register_class(EllipsoidFit)
+	bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
 
 def unregister():
-	bpy.types.INFO_MT_mesh_add.remove(menu_func)
-	bpy.utils.unregister_module(__name__)
+	bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
+	bpy.utils.unregister_class(EllipsoidFit)
 
 if __name__ == "__main__":
 	register()
