@@ -19,7 +19,7 @@ column shows the latest release the add-on was tried with. (Older or newer versi
 |colorramppicker.py                      | 2019-07-29 |      |       |
 |connectedvertexcolors .py               | 2014-07-09 |      |       |
 |createmesh .py                          | 2019-09-03 |      |       |
-|drystone.py                             | 2016-12-13 |      |       |
+|drystone.py                             | 2025-06-28 | 4.4  |       |
 |dumpmesh.py                             | 2019-09-03 |      |       |
 |edgemap_select.py                       | 2025-06-03 | 4.4  |       |
 |ellipsoidfit.py                         | 2019-07-18 |      |       |
