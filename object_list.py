@@ -59,7 +59,7 @@ def object_list(context):
                 edges = len(bm.edges)
                 faces = len(bm.faces)
 
-                yield ob2.name[:], ob2.type[:], tris, faces, edges, verts, ob2.data.name[:] if ob2.data else None, ob2.data.users if ob2.data else 1, ",".join(c.name for c in ob2.users_collection)
+                yield ob.name[:], ob.type[:], tris, faces, edges, verts, ob.data.name[:] if ob.data else None, ob.data.users if ob.data else 1, ",".join(c.name for c in ob.users_collection)
                 bm.clear()
 
                 data = ob2.data
