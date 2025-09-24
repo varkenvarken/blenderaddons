@@ -22,10 +22,10 @@
 bl_info = {
     "name": "ObjectList",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20250330164913),
+    "version": (0, 0, 20250924140226),
     "blender": (4, 4, 0),
     "location": "View3D > Object > Object List",
-    "description": "create a comma separated list with object info",
+    "description": "create a comma separated list with object mesh info",
     "warning": "",
     "wiki_url": "",
     "tracker_url": "",
@@ -35,18 +35,41 @@ import bpy
 import bmesh
 
 def object_list(context):
+
     bm = bmesh.new()
-    # depsgraph = context.view_layer.depsgraph. Not needed, we are not using the depsgraph , we use from_mesh()
-    for ob in context.selected_objects:
-        tris, faces, edges, verts = 0,0,0,0
-        if ob.type == 'MESH':
-            bm.from_mesh(ob.data)
-            tris = len(bm.calc_loop_triangles())
-            verts = len(bm.verts)
-            edges = len(bm.edges)
-            faces = len(bm.faces)
-        yield ob.name, ob.type, tris, faces, edges, verts, ob.data.name if ob.data else None, ob.data.users if ob.data else 1, ",".join(c.name for c in ob.users_collection)
-        bm.clear()
+
+    objects = context.scene.objects[:]
+    
+    selection_status = {ob:ob.select_get() for ob in objects}
+    active_object = context.active_object
+
+    bpy.ops.object.select_all(action='DESELECT')
+
+    for ob in objects:
+        ob.select_set(True)
+        bpy.ops.object.convert(target='MESH', keep_original=True)
+
+        for ob2 in context.scene.objects:
+            if ob2 not in objects:
+
+                tris, faces, edges, verts = 0,0,0,0
+                bm.from_mesh(ob2.data)
+                tris = len(bm.calc_loop_triangles())
+                verts = len(bm.verts)
+                edges = len(bm.edges)
+                faces = len(bm.faces)
+
+                yield ob2.name[:], ob2.type[:], tris, faces, edges, verts, ob2.data.name[:] if ob2.data else None, ob2.data.users if ob2.data else 1, ",".join(c.name for c in ob2.users_collection)
+                bm.clear()
+
+                data = ob2.data
+                bpy.data.objects.remove(ob2)
+                bpy.data.meshes.remove(data)
+
+    for ob in objects:
+        ob.select_set(selection_status[ob])            
+    bpy.context.view_layer.objects.active = active_object
+
     bm.free()
 
 class ObjectList(bpy.types.Operator):
@@ -55,10 +78,12 @@ class ObjectList(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        oblist = list(object_list(bpy.context))
+    
         t = bpy.data.texts.new(name="Object list.csv")
         t.write(",".join(("Name","Type","Tris", "Faces", "Edges", "Verts", "Datablock name","Users", "Collection 1","Collection 2","Collection 3")))
         t.write("\n")
-        for ob in object_list(bpy.context):
+        for ob in oblist:
             t.write(",".join(map(str,ob)))
             t.write("\n")
         return {'FINISHED'}
