@@ -22,7 +22,7 @@
 bl_info = {
     "name": "ObjectList",
     "author": "Michel Anders (varkenvarken)",
-    "version": (0, 0, 20250924141758),
+    "version": (0, 0, 20250924144433),
     "blender": (4, 4, 0),
     "location": "View3D > Object > Object List",
     "description": "create a comma separated list with object mesh info",
@@ -41,19 +41,24 @@ import bmesh
 def object_list(context):
     bm = bmesh.new()
 
+    # get all objects in a scene and remember selected/active status
     objects = context.scene.objects[:]
-
     selection_status = {ob: ob.select_get() for ob in objects}
     active_object = context.active_object
 
     bpy.ops.object.select_all(action="DESELECT")
 
+    # try to convert each object to a mesh while keeping the orginal
     for ob in objects:
         ob.select_set(True)
         bpy.ops.object.convert(target="MESH", keep_original=True)
 
+        # if we have an extra object, the conversion was successful
+        # (Note even a mesh will be converted to a mesh, which is a bit wasteful)
         for ob2 in context.scene.objects:
             if ob2 not in objects:
+
+                # yield a dictionary of mesh data
                 tris, faces, edges, verts = 0, 0, 0, 0
                 bm.from_mesh(ob2.data)
                 tris = len(bm.calc_loop_triangles())
@@ -61,6 +66,8 @@ def object_list(context):
                 edges = len(bm.edges)
                 faces = len(bm.faces)
 
+                # note that names etc come from the original object
+                # and we make sure to copy string to prevent dangling references that might crash Blender
                 info = {
                     "Name": ob.name[:],
                     "Type": ob.type[:],
@@ -76,16 +83,20 @@ def object_list(context):
 
                 yield info
 
+                # clear the bmesh, it will be reused for the next object
                 bm.clear()
 
+                # remove the duplicated mesh object and its data block
                 data = ob2.data
                 bpy.data.objects.remove(ob2)
                 bpy.data.meshes.remove(data)
 
+    # restore the selection and active status
     for ob in objects:
         ob.select_set(selection_status[ob])
     bpy.context.view_layer.objects.active = active_object
 
+    # and remove the bmesh object
     bm.free()
 
 
@@ -95,8 +106,12 @@ class ObjectList(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
+
+        # get a list of dicts that describe each object that is convertible to a mesh
         oblist = list(object_list(bpy.context))
 
+        # add a new text object and a dictwriter that references it
+        # (a text object has a write() method so can be uses by the dictwriter directly
         t = bpy.data.texts.new(name="Object list.csv")
         dictwriter = DictWriter(
             t,
@@ -114,6 +129,7 @@ class ObjectList(bpy.types.Operator):
                 "Collection 3",
             ],
         )
+        # write out the data
         dictwriter.writeheader()
         dictwriter.writerows(oblist)
 
@@ -123,7 +139,7 @@ class ObjectList(bpy.types.Operator):
 def menu_func(self, context):
     self.layout.operator(
         ObjectList.bl_idname,
-        text="Create a comma separated list with object info",
+        text="Create a comma separated list with object mesh info",
         icon="INFO",
     )
 
